@@ -638,7 +638,8 @@ public class JPiereGridView extends Vlayout implements EventListener<Event>, IdS
 			s_cache.put (key, mtab);
 
 		Object oo = mtab.get_Value("JPAdditionalHeaderLine");
-		auxheadSize = Integer.valueOf(oo.toString()).intValue();
+		if(oo!=null)
+			auxheadSize = Integer.valueOf(oo.toString()).intValue();
 
 		Auxhead[] auxheads = new Auxhead[auxheadSize];
 		for(int i = 0 ; i < auxheads.length; i++){
