@@ -41,10 +41,8 @@ import java.util.Properties;
 
 import org.adempiere.util.Callback;
 import org.adempiere.webui.LayoutUtils;
-import org.adempiere.webui.adwindow.BreadCrumb;//JPIERE-0014
 import org.adempiere.webui.component.Tabbox;
 import org.adempiere.webui.component.Tabpanel;
-import org.adempiere.webui.component.ToolBarButton;
 import org.adempiere.webui.panel.IHelpContext;
 import org.adempiere.webui.panel.ITabOnCloseHandler;
 import org.adempiere.webui.part.WindowContainer;
@@ -53,15 +51,12 @@ import org.adempiere.webui.util.ZKUpdateUtil;
 import org.compiere.model.DataStatusEvent;
 import org.compiere.model.X_AD_CtxHelp;
 import org.compiere.util.CLogger;
-import org.zkoss.zk.au.out.AuScript;
 import org.zkoss.zk.ui.Component;
 import org.zkoss.zk.ui.Page;
 import org.zkoss.zk.ui.event.Event;
 import org.zkoss.zk.ui.event.EventListener;
 import org.zkoss.zk.ui.event.Events;
 import org.zkoss.zk.ui.event.KeyEvent;
-import org.zkoss.zk.ui.event.SwipeEvent;
-import org.zkoss.zk.ui.util.Clients;
 import org.zkoss.zul.Div;
 import org.zkoss.zul.Tab;
 import org.zkoss.zul.Vlayout;
@@ -114,48 +109,10 @@ public class JPiereADWindowContent extends JPiereAbstractADWindowContent
         ZKUpdateUtil.setVflex(north, "0");
         toolbar.setParent(div);
         toolbar.setWindowNo(getWindowNo());
-        breadCrumb = new BreadCrumb(getWindowNo());
+        breadCrumb = new JPiereBreadCrumb(this, getWindowNo());
         breadCrumb.setToolbarListener(this);
         breadCrumb.setId("breadCrumb");
         div.appendChild(breadCrumb);
-        div.addEventListener(Events.ON_SWIPE, new EventListener<SwipeEvent>() {
-			@Override
-			public void onEvent(SwipeEvent event) throws Exception {
-				if ("right".equals(event.getSwipeDirection())) {
-					ToolBarButton nextBtn = breadCrumb.getNextButton();
-					if (!nextBtn.isDisabled()) {
-						nextBtn.setDisabled(true);
-						String script = "var w=zk.Widget.$('#"+nextBtn.getUuid()+"');" +
-								"w.fire('onClick',null,{toServer:true});";
-						Clients.response(new AuScript(script));
-					}
-				} else if ("left".equals(event.getSwipeDirection())) {
-					ToolBarButton previousBtn = breadCrumb.getPreviousButton();
-					if (!previousBtn.isDisabled()) {
-						previousBtn.setDisabled(true);
-						String script = "var w=zk.Widget.$('#"+previousBtn.getUuid()+"');" +
-								"w.fire('onClick',null,{toServer:true});";
-						Clients.response(new AuScript(script));
-					}
-				} else if ("up".equals(event.getSwipeDirection())) {
-					ToolBarButton parentBtn = toolbar.getButton("ParentRecord");
-					if (!parentBtn.isDisabled()) {
-						parentBtn.setDisabled(true);
-						String script = "var w=zk.Widget.$('#"+parentBtn.getUuid()+"');" +
-								"w.fire('onClick',null,{toServer:true});";
-						Clients.response(new AuScript(script));
-					}
-				} else if ("down".equals(event.getSwipeDirection())) {
-					ToolBarButton detailBtn = toolbar.getButton("DetailRecord");
-					if (!detailBtn.isDisabled()) {
-						detailBtn.setDisabled(true);
-						String script = "var w=zk.Widget.$('#"+detailBtn.getUuid()+"');" +
-								"w.fire('onClick',null,{toServer:true});";
-						Clients.response(new AuScript(script));
-					}
-				}
-			}
-		});
 
         //status bar
         div.appendChild(statusBar);
@@ -269,26 +226,26 @@ public class JPiereADWindowContent extends JPiereAbstractADWindowContent
 	@Override
 	protected void switchEditStatus(boolean editStatus) {
 		layout.setWidgetOverride("isEditting", "'" + String.valueOf(editStatus) + "'");
-	}	
-	
+	}
+
 	//JPIERE-0014 - set Tab Close handler - Start
 	private boolean isSetOnCloseHandler = false;
-	
+
     private void setOnCloseHandler()
     {
     	if(isSetOnCloseHandler)
     		return ;
-    	
+
     	Component customForm = this.getADTab().getSelectedTabpanel().getParent().getParent().getParent().getParent();
     	if(customForm.getParent() == null)
     		return ;
-    	
+
     	Component tabboxComponent = customForm.getParent().getParent().getParent();
     	if(tabboxComponent instanceof Tabbox)
     	{
     		Tabbox tabbox = (Tabbox)tabboxComponent;
     		org.zkoss.zul.Tabpanel selectedPanel = tabbox.getSelectedPanel();
-	        if (selectedPanel instanceof org.zkoss.zul.Tabpanel) 
+	        if (selectedPanel instanceof org.zkoss.zul.Tabpanel)
 	        {
 	        	TabOnCloseHanlder handler = new TabOnCloseHanlder();
 	        	((org.adempiere.webui.component.Tabpanel)selectedPanel).setOnCloseHandler(handler);
@@ -296,7 +253,7 @@ public class JPiereADWindowContent extends JPiereAbstractADWindowContent
 	        }
     	}
     }
-    
+
     @Override
     public void dataStatusChanged(DataStatusEvent e)
     {

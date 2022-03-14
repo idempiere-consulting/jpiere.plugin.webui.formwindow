@@ -32,9 +32,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Properties;
+//import java.util.Properties; JPIERE commnet out
 
 import org.adempiere.util.GridRowCtx;
+import org.adempiere.webui.ClientInfo;
 import org.adempiere.webui.LayoutUtils;
 import org.adempiere.webui.adwindow.ADWindow;					//JPIERE-0014
 import org.adempiere.webui.adwindow.AbstractADWindowContent;	//JPIERE-0014
@@ -46,6 +47,7 @@ import org.adempiere.webui.component.EditorBox;
 import org.adempiere.webui.component.NumberBox;
 import org.adempiere.webui.component.Textbox;
 import org.adempiere.webui.component.Urlbox;
+import org.adempiere.webui.editor.IEditorConfiguration;
 import org.adempiere.webui.editor.WButtonEditor;
 import org.adempiere.webui.editor.WEditor;
 import org.adempiere.webui.editor.WEditorPopupMenu;
@@ -63,10 +65,8 @@ import org.compiere.model.GridField;
 import org.compiere.model.GridTab;
 import org.compiere.model.MStyle;
 import org.compiere.model.MSysConfig;
-import org.compiere.model.X_AD_StyleLine;
 import org.compiere.util.DisplayType;
 import org.compiere.util.Env;
-import org.compiere.util.Evaluator;
 import org.compiere.util.Msg;
 import org.compiere.util.Util;
 import org.zkoss.zk.au.out.AuScript;
@@ -135,6 +135,18 @@ public class JPiereGridTabRowRenderer implements RowRenderer<Object[]>, RowRende
 	private boolean isGridViewCustomized = false;
 	/** DefaultFocusField		*/
 	private WEditor	defaultFocusField = null;
+
+	private final static IEditorConfiguration readOnlyEditorConfiguration = new IEditorConfiguration() {
+		@Override
+		public Boolean getReadonly() {
+			return Boolean.TRUE;
+		}
+
+		@Override
+		public Boolean getMandatory() {
+			return Boolean.FALSE;
+		}
+	};
 
 	/**
 	 *
@@ -208,15 +220,33 @@ public class JPiereGridTabRowRenderer implements RowRenderer<Object[]>, RowRende
 		textBox.setVisible(false);
 		return textBox;
 	}
+	
+	/**
+	 * Check existence of readonly editor and return display text
+	 * @param value
+	 * @param gridField
+	 * @param rowIndex
+	 * @return display text
+	 */
+	protected String getDisplayTextWithEditorCheck(Object value, GridField gridField, int rowIndex) {
+		WEditor readOnlyEditor = readOnlyEditors.get(gridField);
+		if (readOnlyEditor == null) {
+			readOnlyEditor = WebEditorFactory.getEditor(gridField, true, readOnlyEditorConfiguration);
+			if (readOnlyEditor != null) {
+				readOnlyEditors.put(gridField, readOnlyEditor);
+			}
+		}
+		return getDisplayText(value, gridField, rowIndex);
+	}
 
 	/**
 	 * call {@link #getDisplayText(Object, GridField, int, boolean)} with isForceGetValue = false
 	 * @param value
 	 * @param gridField
 	 * @param rowIndex
-	 * @return
+	 * @return display text
 	 */
-	private String getDisplayText(Object value, GridField gridField, int rowIndex){
+	public String getDisplayText(Object value, GridField gridField, int rowIndex){
 		return getDisplayText(value, gridField, rowIndex, false);
 	}
 
@@ -226,7 +256,7 @@ public class JPiereGridTabRowRenderer implements RowRenderer<Object[]>, RowRende
 	 * @param gridField
 	 * @param rowIndex
 	 * @param isForceGetValue
-	 * @return
+	 * @return display text
 	 */
 	private String getDisplayText(Object value, GridField gridField, int rowIndex, boolean isForceGetValue)
 	{
@@ -427,7 +457,7 @@ public class JPiereGridTabRowRenderer implements RowRenderer<Object[]>, RowRende
 	/**
 	 * @param row
 	 * @param data
-	 * @see RowRenderer#render(Row, Object)
+	 * @param index
 	 */
 	@Override
 	public void render(Row row, Object[] data, int index) throws Exception {
@@ -448,6 +478,7 @@ public class JPiereGridTabRowRenderer implements RowRenderer<Object[]>, RowRende
 				gridTabFields = gridTab.getFields();
 				isGridViewCustomized = gridTabFields.length != gridPanelFields.length;
 			}
+			//gridPanel.autoHideEmptyColumns(); JPIERE-0014
 		}
 
 		if (grid == null)
@@ -481,6 +512,8 @@ public class JPiereGridTabRowRenderer implements RowRenderer<Object[]>, RowRende
 
 
 //		Grid grid = (Grid) row.getParent().getParent();
+		@SuppressWarnings("unused")
+		org.zkoss.zul.Columns columns = grid.getColumns();
 
 		int rowIndex = index;
 		if (paging != null && paging.getPageSize() > 0) {
@@ -505,19 +538,21 @@ public class JPiereGridTabRowRenderer implements RowRenderer<Object[]>, RowRende
 		cell.appendChild(selection);
 		row.appendChild(cell);
 
-		cell = new Cell();
-		cell.setWidth("18px");
-		cell.addEventListener(Events.ON_CLICK, this);
-		cell.setTooltiptext(Util.cleanAmp(Msg.getMsg(Env.getCtx(), "EditRecord")));
-		if (ThemeManager.isUseFontIconForImage()){
-			Label indicatorLabel = new Label();
-			cell.appendChild(indicatorLabel);
-			final Cell finalCell = cell;
-			indicatorLabel.addEventListener(Events.ON_CLICK, evt->Events.postEvent(Events.ON_CLICK, finalCell, indicatorLabel.getSclass()));
+		if (isShowCurrentRowIndicatorColumn()) {
+			cell = new Cell();
+			cell.setWidth("18px"); //JPIERE-0014
+			cell.addEventListener(Events.ON_CLICK, this);
+			//cell.setStyle("border: none;"); JPIERE-0014
+			cell.setTooltiptext(Util.cleanAmp(Msg.getMsg(Env.getCtx(), "EditRecord")));
+			if (ThemeManager.isUseFontIconForImage()){
+				Label indicatorLabel = new Label();
+				cell.appendChild(indicatorLabel);
+				final Cell finalCell = cell;
+				indicatorLabel.addEventListener(Events.ON_CLICK, evt->Events.postEvent(Events.ON_CLICK, finalCell, indicatorLabel.getSclass()));
+			}
+			cell.setValign("middle");
+			row.appendChild(cell);
 		}
-		cell.setValign("middle");
-
-		row.appendChild(cell);
 
 		Boolean isActive = null;
 		Vbox vbox = null;
@@ -535,7 +570,7 @@ public class JPiereGridTabRowRenderer implements RowRenderer<Object[]>, RowRende
 					}
 
 					//readonly for display text
-					WEditor readOnlyEditor = WebEditorFactory.getEditor(gridPanelFields[i], true);
+					WEditor readOnlyEditor = WebEditorFactory.getEditor(gridPanelFields[i], true, readOnlyEditorConfiguration);
 					if (readOnlyEditor != null) {
 						readOnlyEditor.setReadWrite(false);
 						readOnlyEditors.put(gridPanelFields[i], readOnlyEditor);
@@ -641,12 +676,14 @@ public class JPiereGridTabRowRenderer implements RowRenderer<Object[]>, RowRende
 		if (isActive != null && !isActive.booleanValue()) {
 			LayoutUtils.addSclass("grid-inactive-row", row);
 		}
-		
-		//IDEMPIERE-4165 After adding a new row to the list (New or copy) repaint the grid when rendering the last row  
+
+		//IDEMPIERE-4165 After adding a new row to the list (New or copy) repaint the grid when rendering the last row
 		if (gridTab.isNew() && rowIndex == grid.getRows().getChildren().size()-1) {
 			grid.invalidate();
 		}
 
+		if (MSysConfig.getBooleanValue(MSysConfig.ZK_GRID_VIEW_USE_DEFER_RENDERING, false, Env.getAD_Client_ID(Env.getCtx())))
+			row.setRenderdefer(1);
 	}
 
 	/**
@@ -723,6 +760,10 @@ public class JPiereGridTabRowRenderer implements RowRenderer<Object[]>, RowRende
 	 * Enter edit mode
 	 */
 	public void editCurrentRow() {
+		if (ClientInfo.isMobile()) {
+			if (!MSysConfig.getBooleanValue(MSysConfig.ZK_GRID_MOBILE_EDITABLE, false))
+				return;
+		}
 		if (currentRow != null && currentRow.getParent() != null && currentRow.isVisible()
 			&& grid != null && grid.isVisible() && grid.getParent() != null && grid.getParent().isVisible()) {
 			GridField[] gridPanelFields = gridPanel.getFields();
@@ -1000,4 +1041,9 @@ public class JPiereGridTabRowRenderer implements RowRenderer<Object[]>, RowRende
 			Events.sendEvent(gridPanel, new Event("onSelectRow", gridPanel, checkBox));
 		}
 	}
+
+	private boolean isShowCurrentRowIndicatorColumn() {
+		return gridPanel != null && gridPanel.isShowCurrentRowIndicatorColumn();
+	}
+
 }

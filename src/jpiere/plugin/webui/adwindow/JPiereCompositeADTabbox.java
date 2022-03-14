@@ -14,7 +14,7 @@
  * Posterita Ltd., 3, Draper Avenue, Quatre Bornes, Mauritius                 *
  * or via info@posterita.org or http://www.posterita.org/                     *
  *****************************************************************************/
- 
+
 /******************************************************************************
  * Product: JPiere                                                            *
  * Copyright (C) Hideaki Hagiwara (h.hagiwara@oss-erp.co.jp)                  *
@@ -38,9 +38,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 
 import org.adempiere.util.Callback;
+import org.adempiere.webui.adwindow.ADSortTab;
 import org.adempiere.webui.adwindow.ADTabpanel;					//JPIERE-0014
 import org.adempiere.webui.adwindow.AbstractADWindowContent;	//JPIERE-0014
-import org.adempiere.webui.adwindow.BreadCrumb;					//JPIERE-0014
 import org.adempiere.webui.adwindow.BreadCrumbLink;				//JPIERE-0014
 import org.adempiere.webui.adwindow.DetailPane;					//JPIERE-0014
 import org.adempiere.webui.adwindow.IADTabpanel;				//JPIERE-0014
@@ -66,6 +66,7 @@ import org.zkoss.zk.ui.event.Event;
 import org.zkoss.zk.ui.event.EventListener;
 import org.zkoss.zk.ui.event.Events;
 import org.zkoss.zk.ui.util.Clients;
+import org.zkoss.zul.Center;
 import org.zkoss.zul.Menuitem;
 import org.zkoss.zul.Row;
 import org.zkoss.zul.RowRenderer;
@@ -144,9 +145,17 @@ public class JPiereCompositeADTabbox extends JPiereAbstractADTabbox
 						public void onCallback(Boolean result) {
 							if (result) {
 								if (getSelectedDetailADTabpanel().getGridTab().isSingleRow()) {
-									onEditDetail(row, true);
-									if (!adWindowPanel.getActiveGridTab().isNew())
-										adWindowPanel.onNew();
+									if (headerTab.isDetailVisible() && headerTab.getDetailPane().getSelectedPanel().isToggleToFormView()) {
+										if (!getSelectedDetailADTabpanel().getGridTab().isNew()) {
+											getSelectedDetailADTabpanel().getGridTab().dataNew(false);
+											getSelectedDetailADTabpanel().dynamicDisplay(0);
+											focusToTabpanel(getSelectedDetailADTabpanel());
+										}
+									} else {
+										onEditDetail(row, true);
+										if (!adWindowPanel.getActiveGridTab().isNew())
+											adWindowPanel.onNew();
+									}
 								} else {
 									if (!getSelectedDetailADTabpanel().getGridTab().isNew()) {
 										getSelectedDetailADTabpanel().getGridTab().dataNew(false);
@@ -157,7 +166,13 @@ public class JPiereCompositeADTabbox extends JPiereAbstractADTabbox
 													+ "').$();var e=new zk.Event(v,'onEditCurrentRow',null,{toServer:true});zAu.send(e);},200);},200)";
 											Clients.response(new AuScript(script));
 										} else {
-											getSelectedDetailADTabpanel().getJPiereGridView().onEditCurrentRow();
+											boolean isFormView = ((JPiereADTabpanel)headerTab).getJPiereDetailPane().getSelectedPanel().isToggleToFormView();
+											if (isFormView) {
+												getSelectedDetailADTabpanel().dynamicDisplay(0);
+												focusToTabpanel(getSelectedDetailADTabpanel());
+											} else {
+												getSelectedDetailADTabpanel().getJPiereGridView().onEditCurrentRow();
+											}
 										}
 									}
 								}
@@ -167,16 +182,58 @@ public class JPiereCompositeADTabbox extends JPiereAbstractADTabbox
 				}
 				else if (DetailPane.ON_SAVE_EVENT.equals(event.getName())) {
 					if (headerTab.getGridTab().isNew()) return;
-					
+
 					final IADTabpanel tabPanel = getSelectedDetailADTabpanel();
 					if (!tabPanel.getGridTab().dataSave(true)) {
 						showLastError();
-					} 
-					tabPanel.getGridTab().dataRefreshAll(true, true);
-					tabPanel.getGridTab().refreshParentTabs();
+					} else {
+						tabPanel.getGridTab().dataRefreshAll(true, true);
+						tabPanel.getGridTab().refreshParentTabs(true);
+					}
 				}
 				else if (DetailPane.ON_DELETE_EVENT.equals(event.getName())) {
 					onDelete();
+				}
+				else if (DetailPane.ON_QUICK_FORM_EVENT.equals(event.getName()))
+				{
+					if (headerTab.getGridTab().isNew() && !headerTab.needSave(true, false))
+						return;
+
+					final int row = getSelectedDetailADTabpanel() != null ? getSelectedDetailADTabpanel().getGridTab().getCurrentRow() : 0;
+					final boolean formView = event.getData() != null ? (Boolean) event.getData() : true;
+
+					adWindowPanel.saveAndNavigate(new Callback <Boolean>() {
+						@Override
+						public void onCallback(Boolean result)
+						{
+							if (result)
+							{
+								onEditDetail(row, formView);
+								adWindowPanel.onQuickForm();
+							}
+						}
+					});
+				}
+				else if (DetailPane.ON_RECORD_NAVIGATE_EVENT.equals(event.getName())) {
+					final String action = (String) event.getData();
+					adWindowPanel.saveAndNavigate(new Callback <Boolean>() {
+						@Override
+						public void onCallback(Boolean result)
+						{
+							if (result)
+							{
+								if ("first".equalsIgnoreCase(action)) {
+									getSelectedDetailADTabpanel().getGridTab().navigate(0);
+								} else if ("previous".equalsIgnoreCase(action)) {
+									getSelectedDetailADTabpanel().getGridTab().navigateRelative(-1);
+								} else if ("next".equalsIgnoreCase(action)) {
+									getSelectedDetailADTabpanel().getGridTab().navigateRelative(1);
+								} else if ("last".equalsIgnoreCase(action)) {
+									getSelectedDetailADTabpanel().getGridTab().navigate(getSelectedDetailADTabpanel().getGridTab().getRowCount()-1);
+								}
+							}
+						}
+					});
 				}
 			}
 
@@ -242,6 +299,13 @@ public class JPiereCompositeADTabbox extends JPiereAbstractADTabbox
     	return detailPane;
     }
 
+    private void focusToTabpanel(JPiereIADTabpanel adTabPanel ) {
+		if (adTabPanel != null && adTabPanel instanceof HtmlBasedComponent) {
+			final HtmlBasedComponent comp = (HtmlBasedComponent) adTabPanel;
+			Executions.schedule(layout.getDesktop(), e -> {comp.focus();}, new Event("onFocusDefer"));
+		}
+	}
+
     protected void onEditDetail(int row, boolean formView) {
 
 		int oldIndex = selectedIndex;
@@ -263,7 +327,7 @@ public class JPiereCompositeADTabbox extends JPiereAbstractADTabbox
 			headerTab.switchRowPresentation();
 		}
 
-		if (!headerTab.getGridTab().isSortTab())
+		if (!headerTab.getGridTab().isSortTab() && headerTab instanceof JPiereADTabpanel)
 			headerTab.getGridTab().setCurrentRow(row, true);
 
 		if (headerTab.isGridView()) {
@@ -301,7 +365,7 @@ public class JPiereCompositeADTabbox extends JPiereAbstractADTabbox
 			}
 		});
 
-    	BreadCrumb breadCrumb = getBreadCrumb();
+    	JPiereBreadCrumb breadCrumb = getBreadCrumb();
     	breadCrumb.addEventListener(Events.ON_CLICK, new EventListener<Event>() {
 			@Override
 			public void onEvent(Event event) throws Exception {
@@ -429,7 +493,7 @@ public class JPiereCompositeADTabbox extends JPiereAbstractADTabbox
     			headerTab.setJPiereDetailPane(createDetailPane());
     		} else
     			tabPanel.setVisible(false);
-    		ZKUpdateUtil.setHflex(headerTab.getDetailPane(), "1");
+    		ZKUpdateUtil.setHflex(headerTab.getJPiereDetailPane(), "1");
     		headerTab.getJPiereDetailPane().addADTabpanel(tabPanel, tabLabel);
     		tabPanel.setDetailPaneMode(true);
     		headerTab.getJPiereDetailPane().setVflex("true");
@@ -439,7 +503,7 @@ public class JPiereCompositeADTabbox extends JPiereAbstractADTabbox
     		headerTab.getJPiereDetailPane().setVflex("true");
     	}
     	HtmlBasedComponent htmlComponent = (HtmlBasedComponent) tabPanel;
-    	ZKUpdateUtil.setVflex(htmlComponent, "1"); 
+    	ZKUpdateUtil.setVflex(htmlComponent, "1");
     	ZKUpdateUtil.setWidth(htmlComponent, "100%");
 
         tabPanel.getGridTab().addDataStatusListener(new SyncDataStatusListener(tabPanel));
@@ -449,7 +513,7 @@ public class JPiereCompositeADTabbox extends JPiereAbstractADTabbox
 	public boolean updateSelectedIndex(int oldIndex, int newIndex) {
 		boolean b = super.updateSelectedIndex(oldIndex, newIndex);
 		if (b) {
-			BreadCrumb breadcrumb = getBreadCrumb();
+			JPiereBreadCrumb breadcrumb = getBreadCrumb();
 			if (breadcrumb.isEmpty()) {
 				updateBreadCrumb();
 			}
@@ -493,8 +557,10 @@ public class JPiereCompositeADTabbox extends JPiereAbstractADTabbox
     			}
     			hasChanges = true;
     		}
-    		if (hasChanges)
-    			headerTab.getJPiereDetailPane().invalidate();
+    		if (hasChanges) {
+    			if(headerTab.getJPiereDetailPane().getParent() != null)
+    				headerTab.getJPiereDetailPane().getParent().invalidate();
+    		}
     	}
 	}
 
@@ -609,6 +675,18 @@ public class JPiereCompositeADTabbox extends JPiereAbstractADTabbox
 								selectDetailPanel.setVisible(true);
 							}
 							if (!selectDetailPanel.isGridView()) {
+								boolean switchToGrid = true;
+								Component parent = selectDetailPanel.getParent();
+								while (parent != null) {
+									if (parent instanceof JPiereDetailPane.Tabpanel) {
+										JPiereDetailPane.Tabpanel dtp = (JPiereDetailPane.Tabpanel) parent;
+										switchToGrid = !dtp.isToggleToFormView();
+										dtp.afterToggle();
+										break;
+									}
+									parent = parent.getParent();
+								}
+								if (switchToGrid)
 								selectDetailPanel.switchRowPresentation();
 							}
 							if (selectDetailPanel instanceof JPiereADTabpanel)
@@ -653,7 +731,7 @@ public class JPiereCompositeADTabbox extends JPiereAbstractADTabbox
 	}
 
 	private void updateBreadCrumb() {
-		BreadCrumb breadCrumb = getBreadCrumb();
+		JPiereBreadCrumb breadCrumb = getBreadCrumb();
 		breadCrumb.reset();
 		if (selectedIndex > 0) {
 			List<ADTabLabel> parents = new ArrayList<ADTabListModel.ADTabLabel>();
@@ -730,9 +808,9 @@ public class JPiereCompositeADTabbox extends JPiereAbstractADTabbox
 		}
 	}
 
-	private BreadCrumb getBreadCrumb() {
+	private JPiereBreadCrumb getBreadCrumb() {
 		JPiereADWindowContent window = (JPiereADWindowContent) adWindowPanel;
-		BreadCrumb breadCrumb = window.getBreadCrumb();
+		JPiereBreadCrumb breadCrumb = window.getBreadCrumb();
 		return breadCrumb;
 	}
 
@@ -854,10 +932,10 @@ public class JPiereCompositeADTabbox extends JPiereAbstractADTabbox
 	public void dataIgnore() {
 		JPiereIADTabpanel detailPanel = getSelectedDetailADTabpanel();
 		if (detailPanel != null) {
-			if (detailPanel instanceof JPiereADSortTab) {
+			if (detailPanel instanceof ADSortTab) {
 				detailPanel.refresh();
-				if (((JPiereADSortTab) detailPanel).isChanged()) {
-					((JPiereADSortTab) detailPanel).setIsChanged(false);
+				if (((ADSortTab) detailPanel).isChanged()) {
+					((ADSortTab) detailPanel).setIsChanged(false);
 				}
 			} else {
 				detailPanel.getGridTab().dataIgnore();
@@ -920,6 +998,15 @@ public class JPiereCompositeADTabbox extends JPiereAbstractADTabbox
 		}
 		if (!tabPanel.isVisible()) {
 			tabPanel.setVisible(true);
+			if (tabPanel.getDesktop() != null) {
+				Executions.schedule(tabPanel.getDesktop(), e -> {
+					invalidateTabPanel(tabPanel);
+				}, new Event("onPostActivateDetail", tabPanel));
+			} else {
+				invalidateTabPanel(tabPanel);
+			}
+		} else {
+			invalidateTabPanel(tabPanel);
 		}
 		boolean wasForm = false;
 		if (!tabPanel.isGridView()) {
@@ -928,18 +1015,59 @@ public class JPiereCompositeADTabbox extends JPiereAbstractADTabbox
 		}
 		tabPanel.setDetailPaneMode(true);
 		headerTab.getJPiereDetailPane().setVflex("true");
-		if (tabPanel instanceof JPiereADSortTab) {
+		if (tabPanel instanceof ADSortTab) {
 			headerTab.getJPiereDetailPane().updateToolbar(false, true);
 		} else {
 			tabPanel.dynamicDisplay(0);
-			RowRenderer<Object[]> renderer = tabPanel.getJPiereGridView().getListbox().getRowRenderer();
-			JPiereGridTabRowRenderer gtr = (JPiereGridTabRowRenderer)renderer;
-			Row row = gtr.getCurrentRow();
-			if (row != null)
-				gtr.setCurrentRow(row);
+			if (tabPanel.getJPiereGridView() != null && tabPanel.getJPiereGridView().getListbox() != null) {
+				RowRenderer<Object[]> renderer = tabPanel.getJPiereGridView().getListbox().getRowRenderer();
+				if (renderer != null) {
+					JPiereGridTabRowRenderer gtr = (JPiereGridTabRowRenderer)renderer;
+					Row row = gtr.getCurrentRow();
+					if (row != null)
+						gtr.setCurrentRow(row);
+				}
+			}
 		}
-		if (wasForm && tabPanel.getTabLevel() == 0 && headerTab.getTabLevel() != 0) // maintain form on header when zooming to a detail tab
+		if (wasForm) {
+			// maintain form on header when zooming to a detail tab
+			if (tabPanel.getTabLevel() == 0 && headerTab.getTabLevel() != 0) {
+				tabPanel.switchRowPresentation();
+			} else {
+				Component parent = tabPanel.getParent();
+				while (parent != null) {
+					if (parent instanceof JPiereDetailPane.Tabpanel) {
+						JPiereDetailPane.Tabpanel dtp = (JPiereDetailPane.Tabpanel) parent;
+						if (dtp.isToggleToFormView()) {
 			tabPanel.switchRowPresentation();
+							dtp.afterToggle();
+						}
+						break;
+					}
+					parent = parent.getParent();
+				}
+			}
+		}
+	}
+
+	private void invalidateTabPanel(JPiereIADTabpanel tabPanel) {
+		Center center = findCenter(tabPanel.getJPiereGridView());
+		if (center != null)
+			center.invalidate();
+		else
+			tabPanel.invalidate();
+	}
+
+	private Center findCenter(JPiereGridView gridView) {
+		if (gridView == null)
+			return null;
+		Component p = gridView.getParent();
+		while (p != null) {
+			if (p instanceof Center)
+				return (Center)p;
+			p = p.getParent();
+		}
+		return null;
 	}
 
 	private void showLastError() {

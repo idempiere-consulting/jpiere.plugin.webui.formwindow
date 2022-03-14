@@ -1,4 +1,17 @@
 /******************************************************************************
+ * Product: Adempiere ERP & CRM Smart Business Solution                       *
+ * Copyright (C) 2010 Heng Sin Low                							  *
+ * This program is free software; you can redistribute it and/or modify it    *
+ * under the terms version 2 of the GNU General Public License as published   *
+ * by the Free Software Foundation. This program is distributed in the hope   *
+ * that it will be useful, but WITHOUT ANY WARRANTY; without even the implied *
+ * warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.           *
+ * See the GNU General Public License for more details.                       *
+ * You should have received a copy of the GNU General Public License along    *
+ * with this program; if not, write to the Free Software Foundation, Inc.,    *
+ * 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA.                     *
+ *****************************************************************************/
+/******************************************************************************
  * Product: JPiere                                                            *
  * Copyright (C) Hideaki Hagiwara (h.hagiwara@oss-erp.co.jp)                  *
  *                                                                            *
@@ -170,6 +183,7 @@ public class JPiereExportAction implements EventListener<Event>
 			LayoutUtils.addSclass("dialog-footer", confirmPanel);
 			vb.appendChild(confirmPanel);
 			confirmPanel.addActionListener(this);
+			winExportFile.addEventListener(Events.ON_CANCEL, e -> onCancel());
 		}
 		displayExportTabSelection();
 		panel.getComponent().getParent().appendChild(winExportFile);
@@ -177,6 +191,7 @@ public class JPiereExportAction implements EventListener<Event>
 		LayoutUtils.openOverlappedWindow(panel.getComponent(), winExportFile, "middle_center");
 		winExportFile.addEventListener(DialogEvents.ON_WINDOW_CLOSE, this);
 		winExportFile.addEventListener("onExporterException", this);
+		winExportFile.focus();
 
 	}
 
@@ -219,6 +234,7 @@ public class JPiereExportAction implements EventListener<Event>
 			chkSelectionTab.setAttribute("tabBinding", child);
 			vlayout.appendChild(chkSelectionTab);
 			chkSelectionTabForExport.add(chkSelectionTab);
+			chkSelectionTab.addEventListener(Events.ON_CHECK, this);
 			isHasSelectionTab = true;
 		}
 
@@ -231,19 +247,43 @@ public class JPiereExportAction implements EventListener<Event>
 	@Override
 	public void onEvent(Event event) throws Exception {
 		if(event.getTarget().getId().equals(ConfirmPanel.A_CANCEL))
-			winExportFile.onClose();
+			onCancel();
 		else if(event.getTarget().getId().equals(ConfirmPanel.A_OK))
 			exportFile();
 		else if (event.getName().equals(DialogEvents.ON_WINDOW_CLOSE)) {
 			panel.hideBusyMask();
 		}else if (event.getTarget().equals(cboType) && event.getName().equals(Events.ON_SELECT)) {
 			displayExportTabSelection();
+		}else if (event.getTarget() instanceof Checkbox) {
+			// A child is not exportable without its parent
+			Checkbox cbSel = (Checkbox) event.getTarget();
+			GridTab gtSel = (GridTab)cbSel.getAttribute("tabBinding");
+			boolean found = false;
+			for (Checkbox cb : chkSelectionTabForExport) {
+				if (cb == cbSel) {
+					found = true;
+					continue;
+				}
+				GridTab gt = (GridTab)cb.getAttribute("tabBinding");
+				if (found) {
+					if (gt.getTabLevel() > gtSel.getTabLevel()) {
+						cb.setChecked(cbSel.isChecked());
+						cb.setEnabled(cbSel.isChecked());
+					} else {
+						break;
+					}
+				}
+			}
 		}else if (event.getName().equals("onExporterException")){
 			FDialog.error(0, winExportFile, "FileInvalidExtension");
 			winExportFile.onClose();
 		}
 	}
 
+	private void onCancel() {
+		winExportFile.onClose();
+	}
+	
 	/**
 	 * get info of window export,
 	 * index of active tab, list child tab
@@ -318,7 +358,7 @@ public class JPiereExportAction implements EventListener<Event>
 			media = new AMedia(exporter.getSuggestedFileName(panel.getActiveGridTab()), null, exporter.getContentType(), file, true);
 			Filedownload.save(media);
 		} catch (Exception e) {
-			throw new AdempiereException(e);
+			FDialog.error(0, winExportFile, e.getLocalizedMessage());
 		} finally {
 			if (winExportFile != null)
 				winExportFile.onClose();
