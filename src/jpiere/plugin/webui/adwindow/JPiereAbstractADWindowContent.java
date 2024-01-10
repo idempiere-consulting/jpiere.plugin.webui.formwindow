@@ -58,14 +58,19 @@ import org.adempiere.webui.LayoutUtils;
 import org.adempiere.webui.WArchive;
 import org.adempiere.webui.WRequest;
 import org.adempiere.webui.WZoomAcross;
-import org.adempiere.webui.adwindow.ADSortTab;
-import org.adempiere.webui.adwindow.ADTabpanel;
-import org.adempiere.webui.adwindow.BreadCrumbLink;
-import org.adempiere.webui.adwindow.CompositeADTabbox;
-import org.adempiere.webui.adwindow.GridTabRowRenderer;
-import org.adempiere.webui.adwindow.IADTabpanel;
-import org.adempiere.webui.adwindow.ProcessButtonPopup;
-import org.adempiere.webui.adwindow.StatusBar;
+import org.adempiere.webui.adwindow.ADSortTab;				//JPIERE
+import org.adempiere.webui.adwindow.ADTabpanel;			//JPIERE
+import org.adempiere.webui.adwindow.ADWindow;				//JPIERE
+import org.adempiere.webui.adwindow.BreadCrumb;			//JPIERE
+import org.adempiere.webui.adwindow.BreadCrumbLink;		//JPIERE
+import org.adempiere.webui.adwindow.CompositeADTabbox;		//JPIERE
+import org.adempiere.webui.adwindow.GridTabRowRenderer;	//JPIERE
+import org.adempiere.webui.adwindow.IADTabbox;				//JPIERE
+import org.adempiere.webui.adwindow.IADTabpanel;			//JPIERE
+import org.adempiere.webui.adwindow.ProcessButtonPopup;	//JPIERE
+import org.adempiere.webui.adwindow.QuickGridView;			//JPIERE
+import org.adempiere.webui.adwindow.StatusBar;				//JPIERE
+import org.adempiere.webui.adwindow.validator.WindowValidatorEvent;
 import org.adempiere.webui.adwindow.validator.WindowValidatorEventType;
 //import org.adempiere.webui.adwindow.validator.WindowValidatorManager; //JPIERE Comment out
 import org.adempiere.webui.apps.AEnv;
@@ -95,10 +100,10 @@ import org.adempiere.webui.panel.ADForm;
 import org.adempiere.webui.panel.InfoPanel;
 import org.adempiere.webui.panel.WAttachment;
 import org.adempiere.webui.panel.WDocActionPanel;
-//import org.adempiere.webui.panel.action.CSVImportAction;	 //JPIERE Comment out
-//import org.adempiere.webui.panel.action.ExportAction;	 //JPIERE Comment out
-//import org.adempiere.webui.panel.action.FileImportAction;	 //JPIERE Comment out
-//import org.adempiere.webui.panel.action.ReportAction;	 //JPIERE Comment out
+//import org.adempiere.webui.panel.action.CSVImportAction;	 	//JPIERE Comment out
+//import org.adempiere.webui.panel.action.ExportAction;	 		//JPIERE Comment out
+//import org.adempiere.webui.panel.action.FileImportAction;	 	//JPIERE Comment out
+//import org.adempiere.webui.panel.action.ReportAction;	 		//JPIERE Comment out
 import org.adempiere.webui.part.AbstractUIPart;
 import org.adempiere.webui.part.ITabOnSelectHandler;
 import org.adempiere.webui.session.SessionManager;
@@ -127,10 +132,12 @@ import org.compiere.model.MQuery;
 import org.compiere.model.MRecentItem;
 import org.compiere.model.MRole;
 import org.compiere.model.MSysConfig;
+import org.compiere.model.MTable;
 import org.compiere.model.MUserPreference;
 import org.compiere.model.MWindow;
 import org.compiere.model.PO;
 import org.compiere.model.StateChangeEvent;
+import org.compiere.model.SystemProperties;
 import org.compiere.model.X_AD_CtxHelp;
 import org.compiere.process.DocAction;
 import org.compiere.process.ProcessInfo;
@@ -161,12 +168,12 @@ import org.zkoss.zul.RowRenderer;
 import org.zkoss.zul.Window.Mode;
 import org.zkoss.zul.impl.LabelImageElement;
 
-import jpiere.plugin.webui.adwindow.validator.JPiereWindowValidatorEvent; //JPIERE
-import jpiere.plugin.webui.adwindow.validator.JPiereWindowValidatorManager; //JPIERE
-import jpiere.plugin.webui.panel.action.JPiereExportAction; //JPIERE
-import jpiere.plugin.webui.panel.action.JPiereFileImportAction;//JPIERE
-import jpiere.plugin.webui.panel.action.JPiereReportAction; //JPIERE
-import jpiere.plugin.webui.window.form.JPiereWQuickForm; //JPIERE
+import jpiere.plugin.webui.adwindow.validator.JPiereWindowValidatorEvent; 		//JPIERE
+import jpiere.plugin.webui.adwindow.validator.JPiereWindowValidatorManager; 	//JPIERE
+import jpiere.plugin.webui.panel.action.JPiereExportAction; 					//JPIERE
+import jpiere.plugin.webui.panel.action.JPiereFileImportAction;				//JPIERE
+import jpiere.plugin.webui.panel.action.JPiereReportAction; 					//JPIERE
+import jpiere.plugin.webui.window.form.JPiereWQuickForm; 						//JPIERE
 
 /**
  *
@@ -208,6 +215,9 @@ public abstract class JPiereAbstractADWindowContent extends AbstractUIPart imple
      */
 	private static final String ON_DEFER_SET_DETAILPANE_SELECTION_EVENT = "onDeferSetDetailpaneSelection";
 
+	/** ProcessModalDialog attribute to store reference for post process execution callback */
+	private static final String PROCESS_POST_CALLBACK_ATTRIBUTE = "processPostCallbackAttribute";
+	
 	private static final CLogger logger;
 
     static
@@ -535,20 +545,21 @@ public abstract class JPiereAbstractADWindowContent extends AbstractUIPart imple
 			{
 				gridWindow.initTab(tabIndex);
 				//init parent tab by parent ids
-				int[] parentIds = DB.getIDsEx(null, "SELECT " + gTab.getLinkColumnName() + " FROM " + gTab.getTableName() + " WHERE " + query.getWhereClause());
-				if (parentIds.length > 0)
+				StringBuilder sql = new StringBuilder("SELECT ").append(gTab.getLinkColumnName()).append(" FROM ").append(gTab.getTableName()).append(" WHERE ").append(query.getWhereClause());
+				List<Object> parentIds = DB.getSQLValueObjectsEx(null, sql.toString());
+				if (parentIds!=null && parentIds.size() > 0)
 				{
 					GridTab parentTab = null;
 					Map<Integer, MQuery>queryMap = new TreeMap<Integer, MQuery>();
 					Map<Integer, MQuery>childrenQueryMap = new TreeMap<Integer, MQuery>();//JPIERE-0464: JPiere Zoom to Detail
 
-					for (int parentId : parentIds)
+					for (Object parentId : parentIds)
 					{
 						Map<Integer, Object[]>parentMap = new TreeMap<Integer, Object[]>();
 						Map<Integer, Object[]>childrenMap = new TreeMap<Integer, Object[]>();//JPIERE-0464: JPiere Zoom to Detail
 
 						int index = tabIndex;
-						int oldpid = parentId;
+						Object oldpid = parentId;
 						GridTab currentTab = gTab;
 						while (index > 0)
 						{
@@ -722,9 +733,10 @@ public abstract class JPiereAbstractADWindowContent extends AbstractUIPart imple
 					
 					//set target detail tab as active tab and navigate to target record
     				int count = table.getRowCount();
+    				MTable tbl = MTable.get(ctx, table.getTableName());
     				for(int i = 0; i < count; i++)
     				{
-    					int id = -1;
+    					Object id = null;
     					if (zoomColumnIndex >= 0)
     					{
     						Object zoomValue = table.getValueAt(i, zoomColumnIndex);
@@ -732,12 +744,19 @@ public abstract class JPiereAbstractADWindowContent extends AbstractUIPart imple
     						{
     							id = ((Number)zoomValue).intValue();
     						}
+    						else if (zoomValue != null && zoomValue instanceof String)
+    						{
+    							id = zoomValue.toString();
+    						}
     					}
     					else
     					{
-    						id = table.getKeyID(i);
+    						if (tbl.isUUIDKeyTable())
+    							id = table.getUUID(i);
+    						else
+    							id = table.getKeyID(i);
     					}
-    					if (id == ((Integer)query.getZoomValue()).intValue())
+    					if (id != null && id.equals(query.getZoomValue()))
     					{
     						setActiveTab(gridWindow.getTabIndex(gTab), null);
     						gTab.navigate(i);
@@ -851,6 +870,7 @@ public abstract class JPiereAbstractADWindowContent extends AbstractUIPart imple
 		}
 		else
 		{
+			//fallback to ADTabpanel
 			JPiereADTabpanel fTabPanel = new JPiereADTabpanel();
 			initTabPanel(query, tabIndex, gTab, fTabPanel);
 		}
@@ -1236,9 +1256,10 @@ public abstract class JPiereAbstractADWindowContent extends AbstractUIPart imple
     public void onAttachment()
     {
 		int record_ID = adTabbox.getSelectedGridTab().getRecord_ID();
-		if (logger.isLoggable(Level.INFO)) logger.info("Record_ID=" + record_ID);
+    	String recordUU = adTabbox.getSelectedGridTab().getRecord_UU();
+		if (logger.isLoggable(Level.INFO)) logger.info("Record_ID=" + record_ID + ", Record_UU=" + recordUU);
 
-		if (record_ID == -1)	//	No Key
+		if (record_ID== -1 && Util.isEmpty(recordUU))	//	No Key
 		{
 			return;
 		}
@@ -1270,9 +1291,10 @@ public abstract class JPiereAbstractADWindowContent extends AbstractUIPart imple
     public void onChat()
     {
     	int recordId = adTabbox.getSelectedGridTab().getRecord_ID();
-    	if (logger.isLoggable(Level.INFO)) logger.info("Record_ID=" + recordId);
+    	String recordUU = adTabbox.getSelectedGridTab().getRecord_UU();
+    	if (logger.isLoggable(Level.INFO)) logger.info("Record_ID=" + recordId + ", Record_UU=" + recordUU);
 
-		if (recordId== -1)	//	No Key
+		if (recordId== -1 && Util.isEmpty(recordUU))	//	No Key
 		{
 			return;
 		}
@@ -1296,7 +1318,8 @@ public abstract class JPiereAbstractADWindowContent extends AbstractUIPart imple
 		}
 		String description = infoName + ": " + infoDisplay;
 
-    	WChat chat = new WChat(curWindowNo, adTabbox.getSelectedGridTab().getCM_ChatID(), adTabbox.getSelectedGridTab().getAD_Table_ID(), recordId, description, null);
+    	WChat chat = new WChat(curWindowNo, adTabbox.getSelectedGridTab().getCM_ChatID(), adTabbox.getSelectedGridTab().getAD_Table_ID(),
+    			recordId, recordUU, description, null);
     	chat.addEventListener(DialogEvents.ON_WINDOW_CLOSE, new EventListener<Event>() {
 			@Override
 			public void onEvent(Event event) throws Exception {
@@ -1317,7 +1340,8 @@ public abstract class JPiereAbstractADWindowContent extends AbstractUIPart imple
     public void onPostIt()
     {
     	int recordId = adTabbox.getSelectedGridTab().getRecord_ID();
-    	if (recordId== -1)	//	No Key
+    	String recordUU = adTabbox.getSelectedGridTab().getRecord_UU();
+		if (recordId== -1 && Util.isEmpty(recordUU))	//	No Key
     	{
     		return;
     	}
@@ -1338,7 +1362,7 @@ public abstract class JPiereAbstractADWindowContent extends AbstractUIPart imple
     	}
     	String header = infoName + ": " + infoDisplay;
 
-    	WPostIt postit = new WPostIt(header, adTabbox.getSelectedGridTab().getAD_PostIt_ID(), adTabbox.getSelectedGridTab().getAD_Table_ID(), recordId, null);
+    	WPostIt postit = new WPostIt(header, adTabbox.getSelectedGridTab().getAD_PostIt_ID(), adTabbox.getSelectedGridTab().getAD_Table_ID(), recordId, recordUU, null);
     	postit.addEventListener(DialogEvents.ON_WINDOW_CLOSE, new EventListener<Event>() {
     		@Override
     		public void onEvent(Event event) throws Exception {
@@ -1442,7 +1466,7 @@ public abstract class JPiereAbstractADWindowContent extends AbstractUIPart imple
 	public void onQuickForm(boolean stayInParent)
 	{
 		if (logger.isLoggable(Level.FINE))
-		logger.log(Level.FINE, "Invoke Quick Form");
+			logger.log(Level.FINE, "Invoke Quick Form");
 		// Prevent to open Quick Form if already opened.
 		if (!this.registerQuickFormTab(getADTab().getSelectedGridTab().getAD_Tab_ID()))
 		{
@@ -1564,6 +1588,13 @@ public abstract class JPiereAbstractADWindowContent extends AbstractUIPart imple
 			{
     			statusBar.setStatusLine(s, b, logs);
     		}
+						
+			if (dialog.getAttribute(PROCESS_POST_CALLBACK_ATTRIBUTE) != null && dialog.getAttribute(PROCESS_POST_CALLBACK_ATTRIBUTE) instanceof Callback<?>)
+			{
+				@SuppressWarnings("unchecked")
+				Callback<Boolean> callback = (Callback<Boolean>) dialog.getAttribute(PROCESS_POST_CALLBACK_ATTRIBUTE);
+	    		callback.onCallback(dialog.getProcessInfo() != null && !dialog.getProcessInfo().isError());
+			}
     	}
     	else if (ADTabpanel.ON_DYNAMIC_DISPLAY_EVENT.equals(event.getName()))
     	{
@@ -2089,7 +2120,7 @@ public abstract class JPiereAbstractADWindowContent extends AbstractUIPart imple
         }
         else
         {
-        	adTabbox.updateDetailPaneToolbar(changed, readOnly);
+        	adTabbox.updateDetailPaneToolbar(changed, false);//JPIERE-0578:Eliminate the effect on child tab icons when parent tabs are read-only
         }
         boolean isEditting = adTabbox.needSave(true, false) ||
         		adTabbox.getSelectedGridTab().isNew() ||
@@ -2100,17 +2131,17 @@ public abstract class JPiereAbstractADWindowContent extends AbstractUIPart imple
 
         //update recent item
         if (changed && !readOnly && !toolbar.isSaveEnable() ) {
-        	if (tabPanel.getGridTab().getRecord_ID() > 0) {
+        	if (!Util.isEmpty(tabPanel.getGridTab().getRecord_UU())) {
             	if (adTabbox.getSelectedIndex() == 0 && !detailTab) {
             		MRecentItem.addModifiedField(ctx, adTabbox.getSelectedGridTab().getAD_Table_ID(),
-            				adTabbox.getSelectedGridTab().getRecord_ID(), Env.getAD_User_ID(ctx),
+            				adTabbox.getSelectedGridTab().getRecord_ID(), adTabbox.getSelectedGridTab().getRecord_UU(), Env.getAD_User_ID(ctx),
             				Env.getAD_Role_ID(ctx), adTabbox.getSelectedGridTab().getAD_Window_ID(),
             				adTabbox.getSelectedGridTab().getAD_Tab_ID());
             	} else {
 	        		GridTab mainTab = getMainTabAbove();
 	        		if (mainTab != null) {
 			        	MRecentItem.addModifiedField(ctx, mainTab.getAD_Table_ID(),
-			        			mainTab.getRecord_ID(), Env.getAD_User_ID(ctx),
+			        			mainTab.getRecord_ID(), mainTab.getRecord_UU(), Env.getAD_User_ID(ctx),
 			        			Env.getAD_Role_ID(ctx), mainTab.getAD_Window_ID(),
 			        			mainTab.getAD_Tab_ID());
 	        		}
@@ -2154,7 +2185,7 @@ public abstract class JPiereAbstractADWindowContent extends AbstractUIPart imple
         {
             canHaveAttachment = false;
         }
-        if (canHaveAttachment && adTabbox.getSelectedGridTab().getRecord_ID() == -1)    //   No Key
+        if (canHaveAttachment && adTabbox.getSelectedGridTab().getRecord_ID() == -1 && Util.isEmpty(adTabbox.getSelectedGridTab().getRecord_UU()))    //   No Key
         {
             canHaveAttachment = false;
         }
@@ -2187,7 +2218,7 @@ public abstract class JPiereAbstractADWindowContent extends AbstractUIPart imple
         {
             canHaveChat = false;
         }
-        if (canHaveChat && adTabbox.getSelectedGridTab().getRecord_ID() == -1)    //   No Key
+        if (canHaveChat && adTabbox.getSelectedGridTab().getRecord_ID() == -1 && Util.isEmpty(adTabbox.getSelectedGridTab().getRecord_UU()))    //   No Key
         {
             canHaveChat = false;
         }
@@ -2256,9 +2287,6 @@ public abstract class JPiereAbstractADWindowContent extends AbstractUIPart imple
         toolbar.enableRequests(!isNewRow);
 		toolbar.setPressed("Find", adTabbox.getSelectedGridTab().isQueryActive() ||
 				(!isNewRow && (m_onlyCurrentRows || m_onlyCurrentDays > 0)));
-		/*if (adTabbox.getSelectedGridTab().isQueryActive() &&
-				tabFindWindowHashMap.get(adTabbox.getSelectedGridTab()) != null)
-			findWindow = tabFindWindowHashMap.get(adTabbox.getSelectedGridTab());*/
 		toolbar.refreshUserQuery(adTabbox.getSelectedGridTab().getAD_Tab_ID(), getCurrentFindWindow() != null ? getCurrentFindWindow().getAD_UserQuery_ID() : 0);
 
         toolbar.enablePrint(adTabbox.getSelectedGridTab().isPrinted() && !isNewRow);
@@ -2397,7 +2425,7 @@ public abstract class JPiereAbstractADWindowContent extends AbstractUIPart imple
 		focusToActivePanel();
 		// IDEMPIERE-1328 - refresh recent item after running a process, i.e. completing a doc that changes documentno
     	MRecentItem.touchUpdatedRecord(ctx, adTabbox.getSelectedGridTab().getAD_Table_ID(),
-    			adTabbox.getSelectedGridTab().getRecord_ID(), Env.getAD_User_ID(ctx));
+    			adTabbox.getSelectedGridTab().getRecord_ID(), adTabbox.getSelectedGridTab().getRecord_UU(), Env.getAD_User_ID(ctx));
 	}
 
     /**
@@ -2677,7 +2705,7 @@ public abstract class JPiereAbstractADWindowContent extends AbstractUIPart imple
 				        		}
 				        		else if (up.equals(MUserPreference.VIEWFINDRESULT_AlwaysInGridView)) {
 				        			forceGridView = true;
-			        }
+				        		}
 				        		else if (up.equals(MUserPreference.VIEWFINDRESULT_AccordingToThreshold)) {
 				        			forceGridView = adTabbox.getSelectedTabpanel().getGridTab().getRowCount() >= Env.getContextAsInt(Env.getCtx(), MUserPreference.COLUMNNAME_GridAfterFindThreshold);
 				        		}
@@ -3000,17 +3028,17 @@ public abstract class JPiereAbstractADWindowContent extends AbstractUIPart imple
 
 		if (wasChanged) {
 		    if (newRecord) {
-		    	if (adTabbox.getSelectedGridTab().getRecord_ID() > 0) {
+		    	if (!Util.isEmpty(adTabbox.getSelectedGridTab().getRecord_UU())) {
 		        	if (adTabbox.getSelectedIndex() == 0) {
 			        	MRecentItem.addModifiedField(ctx, adTabbox.getSelectedGridTab().getAD_Table_ID(),
-			        			adTabbox.getSelectedGridTab().getRecord_ID(), Env.getAD_User_ID(ctx),
+			        			adTabbox.getSelectedGridTab().getRecord_ID(), adTabbox.getSelectedGridTab().getRecord_UU(), Env.getAD_User_ID(ctx),
 			        			Env.getAD_Role_ID(ctx), adTabbox.getSelectedGridTab().getAD_Window_ID(),
 			        			adTabbox.getSelectedGridTab().getAD_Tab_ID());
 		        	} else {
 		        		GridTab mainTab = getMainTabAbove();
 		        		if (mainTab != null) {
 				        	MRecentItem.addModifiedField(ctx, mainTab.getAD_Table_ID(),
-				        			mainTab.getRecord_ID(), Env.getAD_User_ID(ctx),
+				        			mainTab.getRecord_ID(), mainTab.getRecord_UU(), Env.getAD_User_ID(ctx),
 				        			Env.getAD_Role_ID(ctx), mainTab.getAD_Window_ID(),
 				        			mainTab.getAD_Tab_ID());
 		        		}
@@ -3019,12 +3047,12 @@ public abstract class JPiereAbstractADWindowContent extends AbstractUIPart imple
 		    } else {
 		    	if (adTabbox.getSelectedIndex() == 0) {
 		        	MRecentItem.touchUpdatedRecord(ctx, adTabbox.getSelectedGridTab().getAD_Table_ID(),
-		        			adTabbox.getSelectedGridTab().getRecord_ID(), Env.getAD_User_ID(ctx));
+		        			adTabbox.getSelectedGridTab().getRecord_ID(), adTabbox.getSelectedGridTab().getRecord_UU(), Env.getAD_User_ID(ctx));
 		    	} else {
 	        		GridTab mainTab = getMainTabAbove();
 		    		if (mainTab != null) {
 			        	MRecentItem.touchUpdatedRecord(ctx, mainTab.getAD_Table_ID(),
-			        			mainTab.getRecord_ID(), Env.getAD_User_ID(ctx));
+			        			mainTab.getRecord_ID(), mainTab.getRecord_UU(), Env.getAD_User_ID(ctx));
 		    		}
 		    	}
 		    }
@@ -3274,6 +3302,7 @@ public abstract class JPiereAbstractADWindowContent extends AbstractUIPart imple
 						{
 							statusBar.setStatusLine(Msg.getMsg(Env.getCtx(), "Deleted")+": "+count, false);
 						}
+				            MRecentItem.publishChangedEvent(Env.getAD_User_ID(ctx));
 					}
 					if (postCallback != null)
 						postCallback.onCallback(result);
@@ -3321,6 +3350,7 @@ public abstract class JPiereAbstractADWindowContent extends AbstractUIPart imple
 							{
 								statusBar.setStatusLine(Msg.getMsg(Env.getCtx(), "Deleted") + ": " + count, false);
 							}
+				            MRecentItem.publishChangedEvent(Env.getAD_User_ID(ctx));
 						}
 						if (postCallback != null)
 							postCallback.onCallback(result.getValue().equals(deleteConfirmationLogic));
@@ -3392,8 +3422,9 @@ public abstract class JPiereAbstractADWindowContent extends AbstractUIPart imple
 				if (result) {
 					int table_ID = adTabbox.getSelectedGridTab().getAD_Table_ID();
 					int record_ID = adTabbox.getSelectedGridTab().getRecord_ID();
+					String record_UU = adTabbox.getSelectedGridTab().getRecord_UU();
 
-					final ProcessModalDialog dialog = new ProcessModalDialog(JPiereAbstractADWindowContent.this, getWindowNo(), AD_Process_ID,table_ID, record_ID, true);
+					final ProcessModalDialog dialog = new ProcessModalDialog(JPiereAbstractADWindowContent.this, getWindowNo(), AD_Process_ID,table_ID, record_ID, record_UU, true);
 					if (dialog.isValid()) {
 						dialog.setBorder("normal");
 						getComponent().getParent().appendChild(dialog);
@@ -3462,8 +3493,11 @@ public abstract class JPiereAbstractADWindowContent extends AbstractUIPart imple
 		if (toolbar.getEvent() != null)
 		{
 			int record_ID = adTabbox.getSelectedGridTab().getRecord_ID();
-			if (record_ID <= 0)
-				return;
+			if (record_ID <= 0) {
+				MTable table = MTable.get(adTabbox.getSelectedGridTab().getAD_Table_ID());
+				if (!table.isUUIDKeyTable())
+					return;
+			}
 
 			//	Query
 			MQuery query = new MQuery();
@@ -3528,20 +3562,15 @@ public abstract class JPiereAbstractADWindowContent extends AbstractUIPart imple
 	{
 		if (toolbar.getEvent() != null)
 		{
-			if (adTabbox.getSelectedGridTab().getRecord_ID() <= 0)
-				return;
-
 			int C_BPartner_ID = 0;
 			Object bpartner = adTabbox.getSelectedGridTab().getValue("C_BPartner_ID");
 			if(bpartner != null)
 				C_BPartner_ID = Integer.valueOf(bpartner.toString());
 
-			new WRequest(toolbar.getToolbarItem("Requests"), adTabbox.getSelectedGridTab().getAD_Table_ID(), adTabbox.getSelectedGridTab().getRecord_ID(), C_BPartner_ID);
+			new WRequest(toolbar.getToolbarItem("Requests"), adTabbox.getSelectedGridTab().getAD_Table_ID(), adTabbox.getSelectedGridTab().getRecord_ID(), adTabbox.getSelectedGridTab().getRecord_UU(), C_BPartner_ID);
 		}
 	}
-	//
 
-	// Elaine 2008/07/22
 	/**
      * @see ToolbarListener#onProductInfo()
      */
@@ -3753,6 +3782,7 @@ public abstract class JPiereAbstractADWindowContent extends AbstractUIPart imple
 		//	Record_ID
 
 		int record_ID = adtabPanel.getGridTab().getRecord_ID();
+		String record_UU = adtabPanel.getGridTab().getRecord_UU();
 
 		//	Record_ID - Language Handling
 
@@ -3796,9 +3826,29 @@ public abstract class JPiereAbstractADWindowContent extends AbstractUIPart imple
 						if (!win.isStartProcess()) {
 							return;
 						}
-						boolean startWOasking = true;
-						boolean isProcessMandatory = true;
-						executeButtonProcess(wButton, startWOasking, table_ID, recordIdParam, isProcessMandatory);
+						
+						final Callback<Boolean> postCallback = new Callback<Boolean>() {
+							@Override
+							public void onCallback(Boolean result) {
+								if (result) {
+									JPiereWindowValidatorEvent event = new JPiereWindowValidatorEvent(adwindow, WindowValidatorEventType.AFTER_DOC_ACTION.getName());
+									JPiereWindowValidatorManager.getInstance().fireWindowValidatorEvent(event, null);
+								}
+							}
+						};
+				    	Callback<Boolean> preCallback = new Callback<Boolean>() {
+							@Override
+							public void onCallback(Boolean result) {
+								if (result) {
+									boolean startWOasking = true;
+									boolean isProcessMandatory = true;
+									executeButtonProcess(wButton, startWOasking, table_ID, recordIdParam, isProcessMandatory, postCallback);
+								}
+							}
+						};
+						
+						JPiereWindowValidatorEvent validatorEvent = new JPiereWindowValidatorEvent(adwindow, WindowValidatorEventType.BEFORE_DOC_ACTION.getName(), wButton);
+						JPiereWindowValidatorManager.getInstance().fireWindowValidatorEvent(validatorEvent, preCallback);						
 					}
 				});
 				getComponent().getParent().appendChild(win);
@@ -3819,7 +3869,8 @@ public abstract class JPiereAbstractADWindowContent extends AbstractUIPart imple
 				if(cf.isInitOK())
 				{
 					final WCreateFromWindow window = (WCreateFromWindow) cf.getWindow();
-					window.setWidgetAttribute(AdempiereWebUI.WIDGET_INSTANCE_NAME, AdempiereIdGenerator.escapeId(window.getTitle()));
+					if (SystemProperties.isZkUnitTest())
+						window.setWidgetAttribute(AdempiereWebUI.WIDGET_INSTANCE_NAME, AdempiereIdGenerator.escapeId(window.getTitle()));
 					window.addEventListener(DialogEvents.ON_WINDOW_CLOSE, new EventListener<Event>() {
 						@Override
 						public void onEvent(Event event) throws Exception {
@@ -3925,8 +3976,28 @@ public abstract class JPiereAbstractADWindowContent extends AbstractUIPart imple
 			return;
 		}   //  Posted
 
-		executeButtonProcess(wButton, startWOasking, table_ID, record_ID,
-				isProcessMandatory);
+		final int finalRecordId = record_ID;
+		final String finalRecordUU = record_UU;
+		final Callback<Boolean> postCallback = new Callback<Boolean>() {
+			@Override
+			public void onCallback(Boolean result) {
+				if (result) {
+					JPiereWindowValidatorEvent event = new JPiereWindowValidatorEvent(adwindow, WindowValidatorEventType.AFTER_PROCESS.getName());
+					JPiereWindowValidatorManager.getInstance().fireWindowValidatorEvent(event, null);
+				}
+			}
+		};
+    	Callback<Boolean> preCallback = new Callback<Boolean>() {
+			@Override
+			public void onCallback(Boolean result) {
+				if (result) {
+					executeButtonProcess(wButton, startWOasking, table_ID, finalRecordId, finalRecordUU, isProcessMandatory, postCallback);
+				}
+			}
+		};
+		
+		JPiereWindowValidatorEvent validatorEvent = new JPiereWindowValidatorEvent(adwindow, WindowValidatorEventType.BEFORE_PROCESS.getName(), wButton);
+		JPiereWindowValidatorManager.getInstance().fireWindowValidatorEvent(validatorEvent, preCallback);
 	} // actionButton
 
 	/**
@@ -4016,21 +4087,39 @@ public abstract class JPiereAbstractADWindowContent extends AbstractUIPart imple
 	
 	/**
 	 * Show process, form or info window dialog for button.
-	 * Delegate to {@link #executeButtonProcess0(IProcessButton, boolean, int, int)} or {@link #executionButtonInfoWindow0(IProcessButton)}.
+	 * Delegate to {@link #executeButtonProcess0(IProcessButton, boolean, int, int, String, Callback)} or {@link #executionButtonInfoWindow0(IProcessButton)}.
 	 * @param wButton
 	 * @param startWOasking
 	 * @param table_ID
 	 * @param record_ID
 	 * @param isProcessMandatory
+	 * @param callback 
 	 */
 	public void executeButtonProcess(final IProcessButton wButton,
 			final boolean startWOasking, final int table_ID, final int record_ID,
-			boolean isProcessMandatory) {
+			boolean isProcessMandatory, Callback<Boolean> callback) {
+		executeButtonProcess(wButton, startWOasking, table_ID, record_ID, null, isProcessMandatory, callback);
+	}
+
+	/**
+	 * Show process, form or info window dialog for button.
+	 * Delegate to {@link #executeButtonProcess0(IProcessButton, boolean, int, int, String, Callback)} or {@link #executionButtonInfoWindow0(IProcessButton)}.
+	 * @param wButton
+	 * @param startWOasking
+	 * @param table_ID
+	 * @param record_ID
+	 * @param record_UU
+	 * @param isProcessMandatory
+	 * @param callback 
+	 */
+	public void executeButtonProcess(final IProcessButton wButton,
+			final boolean startWOasking, final int table_ID, final int record_ID, final String record_UU,
+			boolean isProcessMandatory, Callback<Boolean> callback) {
 		/**
 		 *  Start Process ----
 		 */
 
-		if (logger.isLoggable(Level.CONFIG)) logger.config("Process_ID=" + wButton.getProcess_ID() + ", InfoWindow_ID=" + wButton.getInfoWindow_ID() + ", Record_ID=" + record_ID);
+		if (logger.isLoggable(Level.CONFIG)) logger.config("Process_ID=" + wButton.getProcess_ID() + ", InfoWindow_ID=" + wButton.getInfoWindow_ID() + ", Record_ID=" + record_ID + ", Record_UU=" + record_UU);
 
 		if (wButton.getProcess_ID() == 0 && wButton.getInfoWindow_ID() == 0)
 		{
@@ -4053,7 +4142,7 @@ public abstract class JPiereAbstractADWindowContent extends AbstractUIPart imple
 						if (wButton.getInfoWindow_ID() > 0)
 							executionButtonInfoWindow0(wButton);
 						else
-						executeButtonProcess0(wButton, startWOasking, table_ID, record_ID);
+							executeButtonProcess0(wButton, startWOasking, table_ID, record_ID, callback);
 					}
 				}
 			});
@@ -4063,7 +4152,7 @@ public abstract class JPiereAbstractADWindowContent extends AbstractUIPart imple
 			if (wButton.getInfoWindow_ID() > 0)
 				executionButtonInfoWindow0(wButton);
 			else
-				executeButtonProcess0(wButton, startWOasking, table_ID, record_ID);
+				executeButtonProcess0(wButton, startWOasking, table_ID, record_ID, record_UU, callback);
 		}
 	}
 
@@ -4073,9 +4162,24 @@ public abstract class JPiereAbstractADWindowContent extends AbstractUIPart imple
 	 * @param startWOasking
 	 * @param table_ID
 	 * @param record_ID
+	 * @param callback 
 	 */
 	private void executeButtonProcess0(final IProcessButton wButton,
-			boolean startWOasking, int table_ID, int record_ID) {
+			boolean startWOasking, int table_ID, int record_ID, Callback<Boolean> callback) {
+		executeButtonProcess0(wButton, startWOasking, table_ID, record_ID, null, callback);	
+	}
+
+	/**
+	 * Show {@link ADForm} or {@link ProcessModalDialog}.
+	 * @param wButton
+	 * @param startWOasking
+	 * @param table_ID
+	 * @param record_ID
+	 * @param record_UU
+	 * @param callback 
+	 */
+	private void executeButtonProcess0(final IProcessButton wButton,
+			boolean startWOasking, int table_ID, int record_ID, String record_UU, Callback<Boolean> callback) {
 		// call form
 		MProcess pr = new MProcess(ctx, wButton.getProcess_ID(), null);
 		int adFormID = pr.getAD_Form_ID();
@@ -4084,7 +4188,7 @@ public abstract class JPiereAbstractADWindowContent extends AbstractUIPart imple
 			String title = wButton.getDescription();
 			if (title == null || title.length() == 0)
 				title = wButton.getDisplay();
-			ProcessInfo pi = new ProcessInfo (title, wButton.getProcess_ID(), table_ID, record_ID);
+			ProcessInfo pi = new ProcessInfo (title, wButton.getProcess_ID(), table_ID, record_ID, record_UU);
 			pi.setAD_User_ID (Env.getAD_User_ID(ctx));
 			pi.setAD_Client_ID (Env.getAD_Client_ID(ctx));
 			IADTabpanel adtabPanel = null;
@@ -4129,22 +4233,33 @@ public abstract class JPiereAbstractADWindowContent extends AbstractUIPart imple
 			else
 				adtabPanel = findADTabpanel(wButton);
 
-			ProcessInfo pi = new ProcessInfo("", wButton.getProcess_ID(), table_ID, record_ID);
+			ProcessInfo pi = new ProcessInfo("", wButton.getProcess_ID(), table_ID, record_ID, record_UU);
 			if (adtabPanel != null && adtabPanel.isGridView() && adtabPanel.getGridTab() != null)
 			{
 				int[] indices = adtabPanel.getGridTab().getSelection();
 				if (indices.length > 0)
 				{
-					List<Integer> records = new ArrayList<Integer>();
-					for (int i = 0; i < indices.length; i++)
-					{
+					MTable table = MTable.get(adtabPanel.getGridTab().getAD_Table_ID());
+					if (table.isUUIDKeyTable()) {
+						List<String> records = new ArrayList<String>();
+						for (int i = 0; i < indices.length; i++) {
+							String keyUUID = adtabPanel.getGridTab().getKeyUUID(indices[i]);
+							if (!Util.isEmpty(keyUUID))
+								records.add(keyUUID);
+						}
+						pi.setRecord_UUs(records);
+					} else {
+						List<Integer> records = new ArrayList<Integer>();
+						for (int i = 0; i < indices.length; i++) {
 						int keyID = adtabPanel.getGridTab().getKeyID(indices[i]);
 						if (keyID > 0)
 							records.add(keyID);
+						}
+
+						// IDEMPIERE-3998 Set multiple selected grid records into process info
+						pi.setRecord_IDs(records);
 					}
 
-					// IDEMPIERE-3998 Set multiple selected grid records into process info
-					pi.setRecord_IDs(records);
 				}
 			}
 
@@ -4158,6 +4273,8 @@ public abstract class JPiereAbstractADWindowContent extends AbstractUIPart imple
 			{
 				dialog.setBorder("normal");
 				getComponent().getParent().appendChild(dialog);
+				if (callback != null)
+					dialog.setAttribute(PROCESS_POST_CALLBACK_ATTRIBUTE, callback);
 				if (ClientInfo.isMobile())
 				{
 					dialog.doHighlighted();
@@ -4168,6 +4285,21 @@ public abstract class JPiereAbstractADWindowContent extends AbstractUIPart imple
 					LayoutUtils.openOverlappedWindow(getComponent(), dialog, "middle_center");
 				}
 				Executions.schedule(getComponent().getDesktop(), e -> dialog.focus(), new Event("onPostShowProcessModalDialog"));
+			}
+			else if (callback != null)
+			{
+				if (dialog.isCancel()) 
+				{
+					callback.onCallback(Boolean.FALSE);
+				} 
+				else 
+				{
+					pi = dialog.getProcessInfo();
+					if (pi == null || pi.isError())
+						callback.onCallback(Boolean.FALSE);
+					else
+						callback.onCallback(Boolean.TRUE);
+				}
 			}
 		}
 	}
@@ -4215,7 +4347,8 @@ public abstract class JPiereAbstractADWindowContent extends AbstractUIPart imple
 		}
 		infoWindow.setContentStyle("overflow: auto");
 		
-		infoWindow.setWidgetAttribute(AdempiereWebUI.WIDGET_INSTANCE_NAME, AdempiereIdGenerator.escapeId(infoWindow.getTitle()));
+		if (SystemProperties.isZkUnitTest())
+			infoWindow.setWidgetAttribute(AdempiereWebUI.WIDGET_INSTANCE_NAME, AdempiereIdGenerator.escapeId(infoWindow.getTitle()));
 		infoWindow.addEventListener(DialogEvents.ON_WINDOW_CLOSE, new EventListener<Event>() {
 			@Override
 			public void onEvent(Event event) throws Exception {
@@ -4435,22 +4568,9 @@ public abstract class JPiereAbstractADWindowContent extends AbstractUIPart imple
 	@Override
 	public void onCustomize() {
 //		ADTabpanel tabPanel = (ADTabpanel) getADTab().getSelectedTabpanel();
-//		Columns columns = tabPanel.getGridView().getListbox().getColumns();
-//		List<Component> columnList = columns.getChildren();
-//		GridField[] fields = tabPanel.getGridView().getFields();
-//		Map<Integer, String> columnsWidth = new HashMap<Integer, String>();
-//		ArrayList<Integer> gridFieldIds = new ArrayList<Integer>();
-//		for (int i = 0; i < fields.length; i++) {
-//			// 2 is offset of num of column in grid view and actual data fields.
-//			// in grid view, add two function column, indicator column and selection (checkbox) column
-//			// @see GridView#setupColumns
-//			Column column = (Column) columnList.get(i+2);
-//			String width = column.getWidth();
-//			columnsWidth.put(fields[i].getAD_Field_ID(), width);
-//			gridFieldIds.add(fields[i].getAD_Field_ID());
-//
-//		}
-//		CustomizeGridViewDialog.showCustomize(0, adTabbox.getSelectedGridTab().getAD_Tab_ID(), columnsWidth,gridFieldIds,tabPanel.getGridView());
+//		CustomizeGridViewDialog.onCustomize(tabPanel, b -> {
+//			focusToLastFocusEditor();
+//		});
 	}
 
 	/**
@@ -4710,6 +4830,7 @@ public abstract class JPiereAbstractADWindowContent extends AbstractUIPart imple
 //			return 0;
 		int recordID = gridTab.getKeyID(gridTab.getCurrentRow());
 		
+		//JPIERE
 		String sql="SELECT JP_AttachmentFileRecord_ID FROM JP_AttachmentFileRecord WHERE AD_Table_ID=? AND Record_ID=?";
 		int attachid = DB.getSQLValue(null, sql, gridTab.getAD_Table_ID(), recordID);
 		return attachid;
@@ -4719,7 +4840,7 @@ public abstract class JPiereAbstractADWindowContent extends AbstractUIPart imple
 
 	/**
 	 *
-	 * JPIERE-0464: Improvement of Max Records Controle at Window.
+	 * JPIERE-0466: Improvement of Max Records Controle at Window.
 	 * JPIERE-0181: Peformace improvement to Find Widnow
 	 *
 	 * @param isDisplayDialog
@@ -4731,16 +4852,18 @@ public abstract class JPiereAbstractADWindowContent extends AbstractUIPart imple
 		if(MSysConfig.getBooleanValue("JP_FINDWINDOW_COUNT", false, Env.getAD_Client_ID(Env.getCtx())))
 			return false;
 
+		//Top Parent Tab only
+		if(adTabbox.getSelectedGridTab().getTabLevel() != 0)
+			return false;
+		
 		int maxRow = adTabbox.getSelectedGridTab().getMaxQueryRecords();
 		if(maxRow <= 0)
 			return false;
 
     	int rowCount =adTabbox.getSelectedGridTab().getTableModel().getRowCount();
     	boolean isMaxRecords = rowCount >= maxRow;
-    	if(isMaxRecords &&  isDisplayDialog && (dse == null || !isDisplayedDeialog))
+    	if(isMaxRecords &&  isDisplayDialog && (dse == null || !isCheckedMaxRecordsOpeningWindow))
     	{
-    		isDisplayedDeialog = true;
-
         	if(MSysConfig.getBooleanValue("JP_FINDWINDOW_COUNT_ACTION_CONTROL", true, Env.getAD_Client_ID(Env.getCtx())))
         	{
         		Dialog.warn(adTabbox.getSelectedGridTab().getWindowNo(),  "FindOverMax", Msg.getElement(ctx, "MaxQueryRecords")+ " : " + Integer.toString(maxRow)
@@ -4750,8 +4873,11 @@ public abstract class JPiereAbstractADWindowContent extends AbstractUIPart imple
         	}
     	}
 
+    	//Only one time Max Records check when Opening window.
+    	isCheckedMaxRecordsOpeningWindow = true;
+
 		return isMaxRecords;
 	}
 
-	private boolean isDisplayedDeialog = false;//JPIERE-0464 & 0181
+	private boolean isCheckedMaxRecordsOpeningWindow = false;//JPIERE-0466 & 0181
 }

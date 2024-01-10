@@ -48,14 +48,14 @@ import org.adempiere.webui.AdempiereIdGenerator;
 import org.adempiere.webui.AdempiereWebUI;
 import org.adempiere.webui.ClientInfo;
 import org.adempiere.webui.LayoutUtils;
-import org.adempiere.webui.adwindow.ADTreePanel;
-import org.adempiere.webui.adwindow.ADWindowToolbar;
-import org.adempiere.webui.adwindow.AbstractADWindowContent;
-import org.adempiere.webui.adwindow.DetailPane;
-import org.adempiere.webui.adwindow.GridView;
-import org.adempiere.webui.adwindow.IADTabpanel;
-import org.adempiere.webui.adwindow.IFieldEditorContainer;
-import org.adempiere.webui.adwindow.ToolbarProcessButton;
+import org.adempiere.webui.adwindow.ADTreePanel;				//JPIERE
+import org.adempiere.webui.adwindow.ADWindowToolbar;			//JPIERE
+import org.adempiere.webui.adwindow.AbstractADWindowContent;	//JPIERE
+import org.adempiere.webui.adwindow.DetailPane;				//JPIERE
+import org.adempiere.webui.adwindow.GridView;					//JPIERE
+import org.adempiere.webui.adwindow.IADTabpanel;				//JPIERE
+import org.adempiere.webui.adwindow.IFieldEditorContainer;		//JPIERE
+import org.adempiere.webui.adwindow.ToolbarProcessButton;		//JPIERE
 import org.adempiere.webui.apps.CalloutDialog;
 import org.adempiere.webui.component.Borderlayout;
 import org.adempiere.webui.component.Column;
@@ -107,6 +107,7 @@ import org.compiere.model.MTree;
 import org.compiere.model.MTreeNode;
 import org.compiere.model.PO;
 import org.compiere.model.Query;
+import org.compiere.model.SystemProperties;
 import org.compiere.model.X_AD_FieldGroup;
 import org.compiere.model.X_AD_ToolBarButton;
 import org.compiere.util.CCache;
@@ -138,7 +139,6 @@ import org.zkoss.zul.RowRenderer;
 import org.zkoss.zul.Separator;
 import org.zkoss.zul.South;
 import org.zkoss.zul.Space;
-import org.zkoss.zul.Style;
 import org.zkoss.zul.Tabpanels;
 import org.zkoss.zul.Tabs;
 import org.zkoss.zul.Toolbar;
@@ -472,7 +472,9 @@ DataStatusListener, JPiereIADTabpanel,IdSpace, IFieldEditorContainer
 
         this.getChildren().clear();
 
-        setId(AdempiereIdGenerator.escapeId(gridTab.getName())+gridTab.getAD_Tab_ID());//JPIERE-0603
+		if (SystemProperties.isZkUnitTest())
+			setId(AdempiereIdGenerator.escapeId(gridTab.getName()));
+
         int AD_Tree_ID = 0;
 		if (gridTab.isTreeTab())
 			AD_Tree_ID = MTree.getDefaultAD_Tree_ID (
@@ -1598,7 +1600,7 @@ DataStatusListener, JPiereIADTabpanel,IdSpace, IFieldEditorContainer
     			if (preference == null || preference.getAD_Preference_ID() <= 0) {
     				preference = new MPreference(Env.getCtx(), 0, null);
     				preference.setAD_Window_ID(windowId);
-    				preference.setAD_User_ID(userId); // allow System
+    				preference.setAD_User_ID(userId);
     				preference.setAttribute(adTabId+"|DetailPane.IsOpen");
     			}
 				preference.setValue(value ? "Y" : "N");
@@ -2136,8 +2138,13 @@ DataStatusListener, JPiereIADTabpanel,IdSpace, IFieldEditorContainer
 	private void attachDetailPane() {
 		if (formContainer.getSouth() != null) {
 			formContainer.getSouth().setVisible(true);
-			if (formContainer.getSouth().isOpen() && JPieredetailPane != null && JPieredetailPane.getParent() == null) { //JPIERE-XXXX
-				formContainer.appendSouth(JPieredetailPane);
+			if (formContainer.getSouth().isOpen()) {
+				if (JPieredetailPane != null) {
+					if (JPieredetailPane.getParent() != formContainer.getSouth())
+						formContainer.appendSouth(JPieredetailPane);
+					else
+						JPieredetailPane.setVisible(true);
+				}
 			}
 		}
 	}
@@ -2149,7 +2156,7 @@ DataStatusListener, JPiereIADTabpanel,IdSpace, IFieldEditorContainer
 		if (formContainer.getSouth() != null) {
 			formContainer.getSouth().setVisible(false);
 			if (JPieredetailPane != null && JPieredetailPane.getParent() != null) {
-				JPieredetailPane.detach();
+				JPieredetailPane.setVisible(false);
 			}
 		}
 	}
@@ -2478,7 +2485,7 @@ DataStatusListener, JPiereIADTabpanel,IdSpace, IFieldEditorContainer
 
 	/**
 	 * 
-	 * @return {@link AbstractADWindowContenta}
+	 * @return {@link JPiereAbstractADWindowContenta}
 	 */
 	public JPiereAbstractADWindowContent getADWindowContent()
 	{

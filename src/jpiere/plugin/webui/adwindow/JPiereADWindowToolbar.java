@@ -46,9 +46,10 @@ import org.adempiere.webui.action.IAction;
 import org.adempiere.webui.adwindow.ToolbarCustomButton;//JPIERE-0014
 import org.adempiere.webui.apps.AEnv;
 import org.adempiere.webui.component.Combobox;
-import org.adempiere.webui.component.FToolbar;
 import org.adempiere.webui.component.Tabpanel;
+import org.adempiere.webui.component.ToolBar;
 import org.adempiere.webui.component.ToolBarButton;
+import org.adempiere.webui.desktop.IDesktop;
 import org.adempiere.webui.event.ToolbarListener;
 import org.adempiere.webui.part.WindowContainer;
 import org.adempiere.webui.session.SessionManager;
@@ -101,7 +102,7 @@ import org.zkoss.zul.impl.LabelImageElement;
  *
  * @author Hideaki Hagiwara（h.hagiwara@oss-erp.co.jp）
  */
-public class JPiereADWindowToolbar extends FToolbar implements EventListener<Event>
+public class JPiereADWindowToolbar extends ToolBar implements EventListener<Event>
 {
 	/**
 	 * generated serial id
@@ -193,17 +194,10 @@ public class JPiereADWindowToolbar extends FToolbar implements EventListener<Eve
 	private boolean isAllowProductInfo = MRole.getDefault().canAccess_Info_Product();
 
 	private int windowNo = 0;
-	/** previous key event time in ms **/
-	private long prevKeyEventTime = 0;
-	/** 
-	 * Previous key event.
-	 * Use together with prevKeyEventTime to detect double fire of key event from browser
-	 */
-	private KeyEvent prevKeyEvent;
 
 	/**
 	 * Maintain hierarchical Quick form by its parent-child tab while open leaf
-	 * tab once & dispose and doing same action
+	 * tab once and dispose and doing same action
 	 */
 	private int							quickFormTabHrchyLevel		= 0;
 	/** show more button for mobile client **/
@@ -219,6 +213,10 @@ public class JPiereADWindowToolbar extends FToolbar implements EventListener<Eve
 	private int prevWidth;
 	/** AD Window content part that own this toolbar **/
 	private JPiereAbstractADWindowContent windowContent;
+	/**
+	 * SysConfig USE_ESC_FOR_TAB_CLOSING
+	 */
+	private boolean isUseEscForTabClosing = MSysConfig.getBooleanValue(MSysConfig.USE_ESC_FOR_TAB_CLOSING, false, Env.getAD_Client_ID(Env.getCtx()));
 
 	/**
 	 * default constructor
@@ -285,8 +283,10 @@ public class JPiereADWindowToolbar extends FToolbar implements EventListener<Eve
         btnParentRecord.setTooltiptext(btnParentRecord.getTooltiptext()+ "   Alt+Up");
         btnDetailRecord = createButton("DetailRecord", "Detail", "DetailRecord");
         btnDetailRecord.setTooltiptext(btnDetailRecord.getTooltiptext()+ "   Alt+Down");
-        btnReport = createButton("Report", "Report", "Report");
-        btnReport.setTooltiptext(btnReport.getTooltiptext()+ "    Alt+R");
+        if (MRole.getDefault().isCanReport()) {
+        	btnReport = createButton("Report", "Report", "Report");
+        	btnReport.setTooltiptext(btnReport.getTooltiptext()+ "    Alt+R");
+        }
         btnArchive = createButton("Archive", "Archive", "Archive");
         btnPrint = createButton("Print", "Print", "Print");
         btnPrint.setTooltiptext(btnPrint.getTooltiptext()+ "    Alt+P");
@@ -532,7 +532,8 @@ public class JPiereADWindowToolbar extends FToolbar implements EventListener<Eve
 		altKeyMap.put(KeyEvent.DOWN, btnDetailRecord);
 		altKeyMap.put(VK_F, btnFind);
 		altKeyMap.put(VK_Z, btnIgnore);
-		altKeyMap.put(VK_R, btnReport);
+		if (btnReport != null)
+			altKeyMap.put(VK_R, btnReport);
 		altKeyMap.put(VK_P, btnPrint);
 		altKeyMap.put(VK_O, btnProcess);
 		altKeyMap.put(VK_L, btnCustomize);
@@ -591,22 +592,8 @@ public class JPiereADWindowToolbar extends FToolbar implements EventListener<Eve
 			if (!(keyEvent.getKeyCode() == KeyEvent.F2) && windowContent != null && windowContent.getOpenQuickFormTabs().size() > 0)
 				return;
 
-        	if (LayoutUtils.isReallyVisible(this)) {
-	        	//filter same key event that is too close
-	        	//firefox fire key event twice when grid is visible
-	        	long time = System.currentTimeMillis();
-	        	if (prevKeyEvent != null && prevKeyEventTime > 0 &&
-	        			prevKeyEvent.getKeyCode() == keyEvent.getKeyCode() &&
-	    				prevKeyEvent.getTarget() == keyEvent.getTarget() &&
-	    				prevKeyEvent.isAltKey() == keyEvent.isAltKey() &&
-	    				prevKeyEvent.isCtrlKey() == keyEvent.isCtrlKey() &&
-	    				prevKeyEvent.isShiftKey() == keyEvent.isShiftKey()) {
-	        		if ((time - prevKeyEventTime) <= 300) {
-	        			return;
-	        		}
-	        	}
+		if (LayoutUtils.isReallyVisible(this))
 	        	this.onCtrlKeyEvent(keyEvent);
-        	}
         } else if (Events.ON_SELECT.equals(eventName))
         {
         	int index = fQueryName.getSelectedIndex();
@@ -622,6 +609,13 @@ public class JPiereADWindowToolbar extends FToolbar implements EventListener<Eve
 
 			doOnClick(event);
         }
+        else if(IDesktop.ON_CLOSE_WINDOW_SHORTCUT_EVENT.equals(eventName)) {
+        	IDesktop desktop = SessionManager.getAppDesktop();
+        	if (windowNo > 0 && desktop.isCloseTabWithShortcut())
+        		desktop.closeWindow(windowNo);
+        	else
+        		desktop.setCloseTabWithShortcut(true);
+    	}
     }
 
     /**
@@ -803,7 +797,8 @@ public class JPiereADWindowToolbar extends FToolbar implements EventListener<Eve
      */
     public void enableReport(boolean enabled)
     {
-    	this.btnReport.setDisabled(!enabled);
+		if (btnReport != null)
+    		this.btnReport.setDisabled(!enabled);
     }
 
     /**
@@ -880,7 +875,7 @@ public class JPiereADWindowToolbar extends FToolbar implements EventListener<Eve
 
 	/**
      * Turn on/off Lock button (Pressed=On, Not Pressed=Off)
-     * @param enabled
+     * @param locked
      */
     public void lock(boolean locked)
     {
@@ -943,20 +938,17 @@ public class JPiereADWindowToolbar extends FToolbar implements EventListener<Eve
 		ToolBarButton btn = null;
 		if (keyEvent.isAltKey() && !keyEvent.isCtrlKey() && !keyEvent.isShiftKey())
 		{
-			if (keyEvent.getKeyCode() == VK_X)
+			if ((keyEvent.getKeyCode() == VK_X))
 			{
-				if (windowNo > 0)
-				{
-					prevKeyEventTime = System.currentTimeMillis();
-		        	prevKeyEvent = keyEvent;
-					keyEvent.stopPropagation();
-					SessionManager.getAppDesktop().closeWindow(windowNo);
-				}
+				onCloseWithShortcut(keyEvent);
 			}
 			else
 			{
 				btn = altKeyMap.get(keyEvent.getKeyCode());
 			}
+		}
+		else if (keyEvent.getKeyCode() == 0x1B && isUseEscForTabClosing) {	// ESC
+			onCloseWithShortcut(keyEvent);
 		}
 		else if (!keyEvent.isAltKey() && keyEvent.isCtrlKey() && !keyEvent.isShiftKey())
 		{
@@ -993,6 +985,15 @@ public class JPiereADWindowToolbar extends FToolbar implements EventListener<Eve
 	}
 
 	/**
+	 * Close Window
+	 * @param keyEvent
+	 */
+	private void onCloseWithShortcut(KeyEvent keyEvent) {
+		keyEvent.stopPropagation();
+		Events.echoEvent(new Event(IDesktop.ON_CLOSE_WINDOW_SHORTCUT_EVENT, this));
+	}
+	
+	/**
 	 * Fire ON_Click event for button, trigger by shortcut key event.
 	 * @param keyEvent source shortcut key event
 	 * @param btn
@@ -1000,8 +1001,6 @@ public class JPiereADWindowToolbar extends FToolbar implements EventListener<Eve
 	private void fireButtonClickEvent(KeyEvent keyEvent, ToolBarButton btn)
 	{
 		if (btn != null) {
-			prevKeyEventTime = System.currentTimeMillis();
-        	prevKeyEvent = keyEvent;
 			keyEvent.stopPropagation();
 			if (!btn.isDisabled() && btn.isVisible()) {
 				Events.sendEvent(btn, new Event(Events.ON_CLICK, btn));
@@ -1126,7 +1125,7 @@ public class JPiereADWindowToolbar extends FToolbar implements EventListener<Eve
 
 	/**
      * Enable/disable Process button
-     * @param enabled
+	 * @param b boolean
      */
 	public void enableProcessButton(boolean b) {
 		if (btnProcess != null) {
@@ -1226,6 +1225,7 @@ public class JPiereADWindowToolbar extends FToolbar implements EventListener<Eve
 		super.onPageDetached(page);
 		try {
 			SessionManager.getSessionApplication().getKeylistener().removeEventListener(Events.ON_CTRL_KEY, this);
+			removeEventListener(IDesktop.ON_CLOSE_WINDOW_SHORTCUT_EVENT, this);
 		} catch (Exception e) {}
 	}
 
@@ -1234,6 +1234,7 @@ public class JPiereADWindowToolbar extends FToolbar implements EventListener<Eve
 		super.onPageAttached(newpage, oldpage);
 		if (newpage != null) {
 			SessionManager.getSessionApplication().getKeylistener().addEventListener(Events.ON_CTRL_KEY, this);
+			addEventListener(IDesktop.ON_CLOSE_WINDOW_SHORTCUT_EVENT, this);
 		}
 	}
 

@@ -51,7 +51,6 @@ import org.adempiere.webui.action.Actions;
 import org.adempiere.webui.action.IAction;
 import org.adempiere.webui.adwindow.ADSortTab;
 import org.adempiere.webui.adwindow.ADTabpanel;				//JPIERE-0014
-import org.adempiere.webui.adwindow.DetailPane;
 import org.adempiere.webui.adwindow.IADTabpanel;			//JPIERE-0014
 import org.adempiere.webui.adwindow.ProcessButtonPopup;		//JPIERE-0014
 import org.adempiere.webui.adwindow.ToolbarCustomButton;	//JPIERE-0014
@@ -66,6 +65,7 @@ import org.adempiere.webui.component.Window;
 import org.adempiere.webui.session.SessionManager;
 import org.adempiere.webui.theme.ThemeManager;
 import org.adempiere.webui.util.ZKUpdateUtil;
+import org.adempiere.webui.window.CustomizeGridViewDialog;
 import org.adempiere.webui.window.WRecordInfo;
 import org.compiere.model.DataStatusEvent;
 import org.compiere.model.GridTab;
@@ -151,14 +151,6 @@ public class JPiereDetailPane extends Panel implements EventListener<Event>, IdS
 	private static final String SAVE_IMAGE = "images/Save16.png";
 	private static final String QUICK_FORM_IMAGE = "images/QuickForm16.png";
 	private static final String TOGGLE_IMAGE = "images/Multi16.png";
-
-	/** Timestamp for previous key event **/
-	private long prevKeyEventTime = 0;
-	/**
-	 * Previous KeyEvent reference.
-	 * Use together with {@link #prevKeyEventTime} to detect double firing of key event by browser.
-	 */
-	private KeyEvent prevKeyEvent;
 
 	/** tabbox for AD_Tabs **/
 	private Tabbox tabbox;
@@ -628,7 +620,11 @@ public class JPiereDetailPane extends Panel implements EventListener<Event>, IdS
 	protected void onCustomize(Event e) {//JPIERE
 //		if (getSelectedADTabpanel() instanceof ADTabpanel) {
 //			ADTabpanel tabPanel = (ADTabpanel) getSelectedADTabpanel();
-//			CustomizeGridViewDialog.onCustomize(tabPanel);
+//			CustomizeGridViewDialog.onCustomize(tabPanel, b -> {
+//				ADWindow adwindow = ADWindow.findADWindow(DetailPane.this);
+//				if (adwindow != null)
+//					adwindow.getADWindowContent().focusToLastFocusEditor();
+//			});
 //		}
 	}
 
@@ -699,7 +695,7 @@ public class JPiereDetailPane extends Panel implements EventListener<Event>, IdS
 	}
 
 	/**
-	 * @return selected {@link Tabpanel}
+	 * @return selected {@link JPiereTabpanel}
 	 */
 	public Tabpanel getSelectedPanel() {
 		return (Tabpanel) tabbox.getSelectedPanel();
@@ -821,23 +817,9 @@ public class JPiereDetailPane extends Panel implements EventListener<Event>, IdS
 			LayoutUtils.redraw(this);
         } else if (event.getName().equals(Events.ON_CTRL_KEY)) {
         	KeyEvent keyEvent = (KeyEvent) event;
-        	if (LayoutUtils.isReallyVisible(this)) {
-	        	//filter same key event that is too close
-	        	//firefox fire key event twice when grid is visible
-	        	long time = System.currentTimeMillis();
-	        	if (prevKeyEvent != null && prevKeyEventTime > 0 &&
-	        			prevKeyEvent.getKeyCode() == keyEvent.getKeyCode() &&
-	    				prevKeyEvent.getTarget() == keyEvent.getTarget() &&
-	    				prevKeyEvent.isAltKey() == keyEvent.isAltKey() &&
-	    				prevKeyEvent.isCtrlKey() == keyEvent.isCtrlKey() &&
-	    				prevKeyEvent.isShiftKey() == keyEvent.isShiftKey()) {
-	        		if ((time - prevKeyEventTime) <= 300) {
-	        			return;
-	        		}
-	        	}
+			if (LayoutUtils.isReallyVisible(this))
 	        	this.onCtrlKeyEvent(keyEvent);
-        	}
-		}
+       	}
 	}
 
 	/**
@@ -1013,7 +995,7 @@ public class JPiereDetailPane extends Panel implements EventListener<Event>, IdS
 
 	/**
 	 * Edit current record of selected tab.
-	 * This event will make the selected tab becomes the new header tab, i.e become the selected tab of {@link CompositeADTabbox}.
+	 * This event will make the selected tab becomes the new header tab, i.e become the selected tab of {@link JPiereCompositeADTabbox}.
 	 * @param formView true to force form view.
 	 * @throws Exception
 	 */
@@ -1103,7 +1085,7 @@ public class JPiereDetailPane extends Panel implements EventListener<Event>, IdS
 	}
 
 	/**
-	 * Find first {@link Tabpanel} that own comp.
+	 * Find first {@link JPiereTabpanel} that own comp.
 	 * @param comp
 	 * @return {@link Component}
 	 */
@@ -1169,8 +1151,6 @@ public class JPiereDetailPane extends Panel implements EventListener<Event>, IdS
 			}
 		}
 		if (btn != null) {
-			prevKeyEventTime = System.currentTimeMillis();
-        	prevKeyEvent = keyEvent;
 			keyEvent.stopPropagation();
 			if (!btn.isDisabled() && btn.isVisible()) {
 				Events.sendEvent(btn, new Event(Events.ON_CLICK, btn));
@@ -1400,14 +1380,14 @@ public class JPiereDetailPane extends Panel implements EventListener<Event>, IdS
 			btnFirst.setTooltiptext(btnFirst.getTooltiptext()+"    Shift+Alt+Home");
 			appendChild(btnFirst);
 			btnFirst.addEventListener(Events.ON_CLICK, e -> {
-				Event ne = new Event(DetailPane.ON_RECORD_NAVIGATE_EVENT, this, "first");
+				Event ne = new Event(JPiereDetailPane.ON_RECORD_NAVIGATE_EVENT, this, "first");
 				Events.sendEvent(this, ne);
 			});
 	        btnPrevious = createButton("Previous", "Previous", "Previous");
 	        btnPrevious.setTooltiptext(btnPrevious.getTooltiptext()+"    Shift+Alt+Left");
 	        appendChild(btnPrevious);
 	        btnPrevious.addEventListener(Events.ON_CLICK, e -> {
-				Event ne = new Event(DetailPane.ON_RECORD_NAVIGATE_EVENT, this, "previous");
+				Event ne = new Event(JPiereDetailPane.ON_RECORD_NAVIGATE_EVENT, this, "previous");
 				Events.sendEvent(this, ne);
 			});
 	        btnRecordInfo = new ToolBarButton();
@@ -1430,14 +1410,14 @@ public class JPiereDetailPane extends Panel implements EventListener<Event>, IdS
 	        btnNext = createButton("Next", "Next", "Next");
 	        btnNext.setTooltiptext(btnNext.getTooltiptext()+"    Shift+Alt+Right");
 	        btnNext.addEventListener(Events.ON_CLICK, e -> {
-				Event ne = new Event(DetailPane.ON_RECORD_NAVIGATE_EVENT, this, "next");
+				Event ne = new Event(JPiereDetailPane.ON_RECORD_NAVIGATE_EVENT, this, "next");
 				Events.sendEvent(this, ne);
 			});
 	        appendChild(btnNext);
 	        btnLast = createButton("Last", "Last", "Last");
 	        btnLast.setTooltiptext(btnLast.getTooltiptext()+"    Shift+Alt+End");
 	        btnLast.addEventListener(Events.ON_CLICK, e -> {
-				Event ne = new Event(DetailPane.ON_RECORD_NAVIGATE_EVENT, this, "last");
+				Event ne = new Event(JPiereDetailPane.ON_RECORD_NAVIGATE_EVENT, this, "last");
 				Events.sendEvent(this, ne);
 			});
 	        appendChild(btnLast);
