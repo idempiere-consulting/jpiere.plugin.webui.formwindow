@@ -66,7 +66,6 @@ import org.adempiere.webui.component.Window;
 import org.adempiere.webui.session.SessionManager;
 import org.adempiere.webui.theme.ThemeManager;
 import org.adempiere.webui.util.ZKUpdateUtil;
-import org.adempiere.webui.window.CustomizeGridViewDialog;
 import org.adempiere.webui.window.WRecordInfo;
 import org.compiere.model.DataStatusEvent;
 import org.compiere.model.GridTab;
@@ -101,6 +100,9 @@ import org.zkoss.zul.Tabs;
 import org.zkoss.zul.Toolbar;
 
 /**
+ * Detail panel that display the child tabs of a parent {@link ADTabpanel} tab.
+ * Implemented as a panel with {@link Tabbox}.
+ * 
  * @author hengsin
  *
  * @author Hideaki Hagiwara（h.hagiwara@oss-erp.co.jp）
@@ -113,28 +115,32 @@ public class JPiereDetailPane extends Panel implements EventListener<Event>, IdS
 	 */
 	private static final long serialVersionUID = -7914602940626352282L;
 
-	private static final String BTN_PROCESS_ID = "BtnProcess";
+	public static final String BTN_PROCESS_ID = "BtnProcess";
 
-	private static final String BTN_DELETE_ID = "BtnDelete";
+	public static final String BTN_DELETE_ID = "BtnDelete";
 
-	private static final String BTN_EDIT_ID = "BtnEdit";
+	public static final String BTN_EDIT_ID = "BtnEdit";
 
-	private static final String BTN_NEW_ID = "BtnNew";
+	public static final String BTN_NEW_ID = "BtnNew";
 
-	private static final String BTN_SAVE_ID = "BtnSave";
+	public static final String BTN_SAVE_ID = "BtnSave";
 
-	private static final String BTN_QUICK_FORM_ID = "BtnQuickForm";
+	public static final String BTN_QUICK_FORM_ID = "BtnQuickForm";
 
-	private static final String BTN_CUSTOMIZE_ID = "BtnCustomize";
+	public static final String BTN_CUSTOMIZE_ID = "BtnCustomize";
 
 	private static final String BTN_TOGGLE_ID = "BtnToggle";
 
+	/** Boolean execution attribute to indicate tabbox is handling ON_SELECT event **/
 	private static final String TABBOX_ONSELECT_ATTRIBUTE = "detailpane.tabbox.onselect";
 
+	/** event after handling of ON_SElECT event of a detail tab */
 	private static final String ON_POST_SELECT_TAB_EVENT = "onPostSelectTab";
 
+	/** Attribute use by {@link #messageContainers} to hold status text **/
 	private static final String STATUS_TEXT_ATTRIBUTE = "status.text";
 
+	/** Attribute use by {@link #messageContainers} to hold error text **/
 	private static final String STATUS_ERROR_ATTRIBUTE = "status.error";
 
 	private static final String CUSTOMIZE_IMAGE = "images/Customize16.png";
@@ -146,35 +152,57 @@ public class JPiereDetailPane extends Panel implements EventListener<Event>, IdS
 	private static final String QUICK_FORM_IMAGE = "images/QuickForm16.png";
 	private static final String TOGGLE_IMAGE = "images/Multi16.png";
 
-
+	/** Timestamp for previous key event **/
 	private long prevKeyEventTime = 0;
+	/**
+	 * Previous KeyEvent reference.
+	 * Use together with {@link #prevKeyEventTime} to detect double firing of key event by browser.
+	 */
 	private KeyEvent prevKeyEvent;
 
-
+	/** tabbox for AD_Tabs **/
 	private Tabbox tabbox;
 
+	/** Registered event listener for DetailPane events **/
 	private EventListener<Event> eventListener;
 
+	/** AD_Tab_ID:Hbox. Message (status, error) container for each tab. **/
 	private Map<Integer, Hbox> messageContainers = new HashMap<Integer, Hbox>();
 
+	/** content for message popup **/
 	private Div msgPopupCnt;
 
+	/** message popup window **/
 	private Window msgPopup;
 
+	/** last selected tab index **/
 	private int prevSelectedIndex = 0;
 
+	/**
+	 * On activate event for detail tab.
+	 * Use to activate detail tab or notify detail tab after header tab change.
+	 */
 	public static final String ON_ACTIVATE_DETAIL_EVENT = "onActivateDetail";
 
+	/** on delete event for selected tab **/
 	public static final String ON_DELETE_EVENT = "onDelete";
 
+	/** on new event for selected tab **/
 	public static final String ON_NEW_EVENT = "onNew";
 
+	/** event to edit current row of selected tab **/
 	public static final String ON_EDIT_EVENT = "onEdit";
 
+	/** on save event for selected tab **/
 	public static final String ON_SAVE_EVENT = "onSave";
 
+	/** on quick form event for selected tab **/
 	public static final String ON_QUICK_FORM_EVENT = "onQuickForm";
 
+	/**
+	 * Record navigation event for selected tab.
+	 * Event data is the navigation action (previous, next, first and last).
+	 */
 	public static final String ON_RECORD_NAVIGATE_EVENT = "onRecordNavigate";
 
 	/**
@@ -247,7 +275,7 @@ public class JPiereDetailPane extends Panel implements EventListener<Event>, IdS
 	}
 
 	/**
-	 * replace of add
+	 * Replace or add IADTabpanel to tabbox.
 	 * @param index
 	 * @param tabPanel
 	 * @param tabLabel
@@ -261,7 +289,7 @@ public class JPiereDetailPane extends Panel implements EventListener<Event>, IdS
 	}
 
 	/**
-	 * replace or add
+	 * Replace or add IADTabpanel to tabbox.
 	 * @param index
 	 * @param tabPanel
 	 * @param tabLabel
@@ -276,7 +304,7 @@ public class JPiereDetailPane extends Panel implements EventListener<Event>, IdS
 	}
 
 	/**
-	 *
+	 * Add IADTabpanel to tabbox
 	 * @param tabPanel
 	 * @param tabLabel
 	 */
@@ -285,7 +313,7 @@ public class JPiereDetailPane extends Panel implements EventListener<Event>, IdS
 	}
 
 	/**
-	 *
+	 * Add IADTabpanel to tabbox
 	 * @param tabPanel
 	 * @param tabLabel
 	 * @param enabled
@@ -307,6 +335,7 @@ public class JPiereDetailPane extends Panel implements EventListener<Event>, IdS
 		tab.addEventListener(Events.ON_CLICK, new EventListener<Event>() {
 			@Override
 			public void onEvent(Event event) throws Exception {
+				//click on tab title trigger edit of current row
 				Tab tab = (Tab) event.getTarget();
 				if (!tab.isSelected())
 					return;
@@ -336,6 +365,8 @@ public class JPiereDetailPane extends Panel implements EventListener<Event>, IdS
 		}
 		Tabpanel tp = new Tabpanel();
 		tabpanels.appendChild(tp);
+		
+		//setup toolbar
 		ToolBar toolbar = tp.getToolbar();
 
 		HashMap<String, ToolBarButton> buttons = new HashMap<String, ToolBarButton>();
@@ -443,7 +474,7 @@ public class JPiereDetailPane extends Panel implements EventListener<Event>, IdS
 				}
 			}
 		});
-		button.setTooltiptext(Util.cleanAmp(Msg.getMsg(Env.getCtx(), "QuickForm")));
+		button.setTooltiptext(Util.cleanAmp(Msg.getMsg(Env.getCtx(), "QuickForm")) + "    Shift+Alt+Q");
 		buttons.put(BTN_QUICK_FORM_ID.substring(3, BTN_QUICK_FORM_ID.length()), button);
 
 		// ADD Customize grid button
@@ -468,6 +499,7 @@ public class JPiereDetailPane extends Panel implements EventListener<Event>, IdS
 		button.setTooltiptext(Util.cleanAmp(Msg.getMsg(Env.getCtx(), "Toggle")) + "    Shift+Alt+T");
 		buttons.put(BTN_TOGGLE_ID.substring(3, BTN_TOGGLE_ID.length()), button);
 
+		//Detail toolbar button configure at AD_ToolBarButton
 		MToolBarButton[] officialButtons = MToolBarButton.getToolbarButtons("D", null);
 		for (MToolBarButton toolbarButton : officialButtons) {
 			if ( !toolbarButton.isActive() ) {
@@ -529,7 +561,7 @@ public class JPiereDetailPane extends Panel implements EventListener<Event>, IdS
 			}
 		}
 
-
+		//container for status and error text
 		Hbox messageContainer = new Hbox();
 		messageContainer.setPack("end");
 		messageContainer.setAlign("center");
@@ -590,18 +622,18 @@ public class JPiereDetailPane extends Panel implements EventListener<Event>, IdS
 	}
 
 	/**
-	 * open customize grid dialog
+	 * Open customize grid view dialog.
 	 * @param e
 	 */
-	protected void onCustomize(Event e) {
-		if (getSelectedADTabpanel() instanceof ADTabpanel) {
-			ADTabpanel tabPanel = (ADTabpanel) getSelectedADTabpanel();
-			CustomizeGridViewDialog.onCustomize(tabPanel);
-		}
+	protected void onCustomize(Event e) {//JPIERE
+//		if (getSelectedADTabpanel() instanceof ADTabpanel) {
+//			ADTabpanel tabPanel = (ADTabpanel) getSelectedADTabpanel();
+//			CustomizeGridViewDialog.onCustomize(tabPanel);
+//		}
 	}
 
 	/**
-	 * open process dropdown
+	 * open process list popup
 	 * @param button
 	 */
 	protected void onProcess(Component button) {
@@ -616,7 +648,7 @@ public class JPiereDetailPane extends Panel implements EventListener<Event>, IdS
 	}
 
 	/**
-	 *
+	 * Set event listener for DetailPane events
 	 * @param listener
 	 */
 	public void setEventListener(EventListener<Event> listener) {
@@ -638,7 +670,7 @@ public class JPiereDetailPane extends Panel implements EventListener<Event>, IdS
 
 	/**
 	 * @param index
-	 * @return adtabpanel at index
+	 * @return IADTabpanel at index
 	 */
 	public JPiereIADTabpanel getADTabpanel(int index) {
 		if (index < 0 || index >= tabbox.getTabpanels().getChildren().size())
@@ -653,8 +685,7 @@ public class JPiereDetailPane extends Panel implements EventListener<Event>, IdS
 	}
 
 	/**
-	 *
-	 * @return selected adtabpanel
+	 * @return selected IADTabpanel
 	 */
 	public JPiereIADTabpanel getSelectedADTabpanel() {
 		org.zkoss.zul.Tabpanel selectedPanel = tabbox.getSelectedPanel();
@@ -668,15 +699,14 @@ public class JPiereDetailPane extends Panel implements EventListener<Event>, IdS
 	}
 
 	/**
-	 *
-	 * @return {@link Tabpanel}
+	 * @return selected {@link Tabpanel}
 	 */
 	public Tabpanel getSelectedPanel() {
 		return (Tabpanel) tabbox.getSelectedPanel();
 	}
 
 	/**
-	 *
+	 * Set status and error text for selected tab.
 	 * @param status
 	 * @param error
 	 */
@@ -698,6 +728,7 @@ public class JPiereDetailPane extends Panel implements EventListener<Event>, IdS
     	}
 
 		messageContainer.getChildren().clear();
+		//store in attribute for retrieval in ON_CLICK event
 		messageContainer.setAttribute(STATUS_ERROR_ATTRIBUTE, error);
     	messageContainer.setAttribute(STATUS_TEXT_ATTRIBUTE, status);
     	messageContainer.setSclass(error ? "docstatus-error" : "docstatus-normal");
@@ -734,6 +765,11 @@ public class JPiereDetailPane extends Panel implements EventListener<Event>, IdS
     	}
 	}
 
+	/**
+	 * Shorten status text to a more presentable length.
+	 * @param statusText
+	 * @return shorten status text
+	 */
 	private String buildLabelText(String statusText) {
 		if (statusText == null)
 			return "";
@@ -746,6 +782,11 @@ public class JPiereDetailPane extends Panel implements EventListener<Event>, IdS
 		return statusText.substring(0, 80);
 	}
 
+	/**
+	 * Shorten notification text to a more presentable length.
+	 * @param statusText
+	 * @return shorten notification text
+	 */
 	private String buildNotificationText(String statusText) {
 		if (statusText == null)
 			return "";
@@ -799,16 +840,28 @@ public class JPiereDetailPane extends Panel implements EventListener<Event>, IdS
 		}
 	}
 
+	/**
+	 * Create popup content for message popup window
+	 * @param status
+	 */
 	protected void createPopupContent(String status) {
 		Text t = new Text(status);
 		msgPopupCnt.getChildren().clear();
 		msgPopupCnt.appendChild(t);
 	}
 
+	/**
+	 * Show notification popup using Clients.showNotification
+	 * @param error
+	 * @param msg
+	 */
 	private void showPopup(boolean error, String msg) {
 		Clients.showNotification(buildNotificationText(msg), "error", findTabpanel(this), "at_pointer", 3500, true);
 	}
 
+	/**
+	 * Create message popup window
+	 */
 	private void createPopup() {
 		msgPopupCnt = new Div();
 		ZKUpdateUtil.setVflex(msgPopupCnt, "1");
@@ -925,10 +978,13 @@ public class JPiereDetailPane extends Panel implements EventListener<Event>, IdS
         	}
         }
         
-        // update from customized implementation
+		//Not use by ADTabpanel, for custom IADTabpanel implementation.
 		adtab.updateDetailToolbar(toolbar);
 	}
 
+	/**
+	 * Update state of Process toolbar button.
+	 */
 	private void updateProcessToolbar() {
 		int index = getSelectedIndex();
 		if (index < 0 || index >= getTabcount()) return;
@@ -956,8 +1012,9 @@ public class JPiereDetailPane extends Panel implements EventListener<Event>, IdS
 	}
 
 	/**
-	 * Edit current record
-	 * @param formView
+	 * Edit current record of selected tab.
+	 * This event will make the selected tab becomes the new header tab, i.e become the selected tab of {@link CompositeADTabbox}.
+	 * @param formView true to force form view.
 	 * @throws Exception
 	 */
 	public void onEdit(boolean formView) throws Exception {
@@ -966,7 +1023,7 @@ public class JPiereDetailPane extends Panel implements EventListener<Event>, IdS
 	}
 
 	/**
-	 * fire the on activate detail event
+	 * Fire ON_ACTIVATE_DETAIL_EVENT for selected tab.
 	 */
 	public void fireActivateDetailEvent() {
 		int index = tabbox.getSelectedIndex();
@@ -994,7 +1051,6 @@ public class JPiereDetailPane extends Panel implements EventListener<Event>, IdS
 	}
 
 	/**
-	 *
 	 * @param tabIndex
 	 * @return true if tab at tabIndex is visible
 	 */
@@ -1018,7 +1074,6 @@ public class JPiereDetailPane extends Panel implements EventListener<Event>, IdS
 	}
 
 	/**
-	 *
 	 * @param tabIndex
 	 * @param enabled
 	 */
@@ -1031,7 +1086,7 @@ public class JPiereDetailPane extends Panel implements EventListener<Event>, IdS
 	}
 
 	/**
-	 * disable toolbar
+	 * Disable all toolbar buttons
 	 */
 	public void disableToolbar() {
 		int index = getSelectedIndex();
@@ -1047,6 +1102,11 @@ public class JPiereDetailPane extends Panel implements EventListener<Event>, IdS
 		}
 	}
 
+	/**
+	 * Find first {@link Tabpanel} that own comp.
+	 * @param comp
+	 * @return {@link Component}
+	 */
 	private Component findTabpanel(Component comp) {
 		Component parent = comp.getParent();
 		while (parent != null) {
@@ -1059,7 +1119,7 @@ public class JPiereDetailPane extends Panel implements EventListener<Event>, IdS
 	}
 
 	/**
-	 * add new record
+	 * add new row
 	 * @throws Exception
 	 */
 	public void onNew() throws Exception {
@@ -1074,6 +1134,11 @@ public class JPiereDetailPane extends Panel implements EventListener<Event>, IdS
     private static final int VK_D = 0x44;
     private static final int VK_O = 0x4F;
     private static final int VK_Q = 0x51;
+    
+    /**
+     * Handle shortcut key event
+     * @param keyEvent
+     */
 	private void onCtrlKeyEvent(KeyEvent keyEvent) {
 		ToolBarButton btn = null;
 		if (keyEvent.isAltKey() && !keyEvent.isCtrlKey() && keyEvent.isShiftKey()) { // Shift+Alt key
@@ -1110,22 +1175,20 @@ public class JPiereDetailPane extends Panel implements EventListener<Event>, IdS
 			if (!btn.isDisabled() && btn.isVisible()) {
 				Events.sendEvent(btn, new Event(Events.ON_CLICK, btn));
 				//client side script to close combobox popup
-				String script = "var w=zk.Widget.$('#" + btn.getUuid()+"'); " +
-						"zWatch.fire('onFloatUp', w);";
+				String script = "(function(){let w=zk.Widget.$('#" + btn.getUuid()+"'); " +
+						"zWatch.fire('onFloatUp', w);})()";
 				Clients.response(new AuScript(script));
 			}
 		}
 	}
 
 	/**
-	 * tabpanel for adtabpanel
-	 * @author hengsin
-	 *
+	 * Custom {@link org.adempiere.webui.component.Tabpanel} implementation for DetailPane.
 	 */
 	public static class Tabpanel extends org.adempiere.webui.component.Tabpanel {
 
 		/**
-		 *
+		 * generated serial id 
 		 */
 		private static final long serialVersionUID = 8248794614430375822L;
 
@@ -1178,7 +1241,6 @@ public class JPiereDetailPane extends Panel implements EventListener<Event>, IdS
 		}
 
 		/**
-		 *
 		 * @return true if tab have been toggle to form view
 		 */
 		public boolean isToggleToFormView() {
@@ -1231,7 +1293,7 @@ public class JPiereDetailPane extends Panel implements EventListener<Event>, IdS
 		}
 
 		/**
-		 * set paging control container
+		 * Set paging control
 		 * @param pagingControl
 		 */
 		public void setPagingControl(Div pagingControl) {
@@ -1247,7 +1309,7 @@ public class JPiereDetailPane extends Panel implements EventListener<Event>, IdS
 
 		/**
 		 *
-		 * @return paging control container
+		 * @return paging control
 		 */
 		public Div getPagingControl() {
 			return pagingControl;
@@ -1265,7 +1327,7 @@ public class JPiereDetailPane extends Panel implements EventListener<Event>, IdS
 
 		/**
 		 * 
-		 * @return buttons from the detail toolbar
+		 * @return toolbar buttons from the detail toolbar
 		 */
 		private List<ToolBarButton> getToolbarButtons() {
 
@@ -1279,6 +1341,9 @@ public class JPiereDetailPane extends Panel implements EventListener<Event>, IdS
 			return list;
 		}
 
+		/**
+		 * Create overflow button (show more) for mobile client.
+		 */
 		private void createOverflowButton() {
 			overflowButton = new A();
 			overflowButton.setTooltiptext(Msg.getMsg(Env.getCtx(), "ShowMore"));
@@ -1298,6 +1363,9 @@ public class JPiereDetailPane extends Panel implements EventListener<Event>, IdS
 			});
 		}
 
+		/**
+		 * Create new overflow popup
+		 */
 		private void newOverflowPopup() {
 			overflowPopup = new Popup();
 			overflowPopup.setHflex("min");
@@ -1313,7 +1381,7 @@ public class JPiereDetailPane extends Panel implements EventListener<Event>, IdS
 	private static class RecordToolbar extends Hlayout {
 
 		/**
-		 *
+		 * generated serial id
 		 */
 		private static final long serialVersionUID = 5024630043211194429L;
 		private ToolBarButton btnFirst;
@@ -1323,6 +1391,9 @@ public class JPiereDetailPane extends Panel implements EventListener<Event>, IdS
 		private ToolBarButton btnLast;
 		private GridTab gridTab;
 
+		/**
+		 * @param gridTab
+		 */
 		private RecordToolbar(GridTab gridTab) {
 			this.gridTab = gridTab;
 			btnFirst = createButton("First", "First", "First");
@@ -1346,6 +1417,7 @@ public class JPiereDetailPane extends Panel implements EventListener<Event>, IdS
 	        	if (gridTab.isNew() || gridTab.getRowCount() == 0)
 	        		return;
 	        	DataStatusEvent dse = new DataStatusEvent(gridTab, gridTab.getRowCount(), gridTab.needSave(true, true), true, false);
+	        	dse.AD_Table_ID = gridTab.getAD_Table_ID();
 	        	gridTab.updateDataStatusEventProperties(dse);
 	        	dse.setCurrentRow(gridTab.getCurrentRow());
 	        	String title = Msg.getMsg(Env.getCtx(), "Who") + btnRecordInfo.getLabel();
@@ -1372,6 +1444,13 @@ public class JPiereDetailPane extends Panel implements EventListener<Event>, IdS
 	        this.setValign("middle");
 		}
 
+		/**
+		 * Create toolbar button
+		 * @param name
+		 * @param image
+		 * @param tooltip
+		 * @return {@link ToolBarButton}
+		 */
 		private ToolBarButton createButton(String name, String image, String tooltip)
 	    {
 	    	ToolBarButton btn = new ToolBarButton("");
@@ -1394,6 +1473,9 @@ public class JPiereDetailPane extends Panel implements EventListener<Event>, IdS
 	        return btn;
 	    }
 
+		/**
+		 * Dynamic update state of toolbar buttons
+		 */
 		private void dynamicDisplay() {
 			int rowCount = gridTab.getRowCount();
 			int currentRow = gridTab.getCurrentRow()+1;
