@@ -1219,5 +1219,11 @@ public class JPiereADSortTab extends Panel implements JPiereIADTabpanel
 		return null;
 	}
 
+	@Override
+	public void onAfterFind() {
+		// TODO Auto-generated method stub
+		
+	}
+
 }	//ADSortTab
 

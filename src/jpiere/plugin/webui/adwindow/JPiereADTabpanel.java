@@ -344,7 +344,7 @@ DataStatusListener, JPiereIADTabpanel, IdSpace, IFieldEditorContainer
         ZKUpdateUtil.setHeight(form, null);
         form.setVflex(false);
         form.setSclass("grid-layout adwindow-form");
-        form.setWidgetAttribute(AdempiereWebUI.WIDGET_INSTANCE_NAME, "form");
+        form.setClientAttribute(AdempiereWebUI.WIDGET_INSTANCE_NAME, "form");
         //swipe listener for mobile
         if (ClientInfo.isMobile())
         {
@@ -2498,6 +2498,12 @@ DataStatusListener, JPiereIADTabpanel, IdSpace, IFieldEditorContainer
 	@Override
 	public void init(AbstractADWindowContent winPanel, GridTab gridTab) {
 		;
+	}
+
+	@Override
+	public void onAfterFind() {
+		// TODO Auto-generated method stub
+		
 	}
 
 }

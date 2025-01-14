@@ -1045,10 +1045,10 @@ public class JPiereFormWindowZoomDesktop extends TabbedDesktop implements MenuLi
 	}
 
 	@Override
-	public void updateHelpTooltip(String hdr, String  desc, String help, String otherContent) {
+	public void updateHelpTooltip(String hdr, String  desc, String help, String otherContent, String entityType) {
         if(isDisplayEastContents)//JPIERE-0120:
         {
-        	helpController.renderToolTip(hdr, desc, help, otherContent);
+        	helpController.renderToolTip(hdr, desc, help, otherContent, entityType);
         }
 	}
 	
@@ -1277,5 +1277,4 @@ public class JPiereFormWindowZoomDesktop extends TabbedDesktop implements MenuLi
 		super.showZoomWindow(AD_Window_ID, query);
 
 	}//showZoomWindow
-
 }
