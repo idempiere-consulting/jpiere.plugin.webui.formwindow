@@ -14,7 +14,8 @@ Require-Bundle: org.adempiere.base,
  zkplus,
  zul,
  zel,
- zhtml
+ zhtml,
+ org.osgi.service.event
 Service-Component: OSGI-INF/*.xml
 Bundle-ActivationPolicy: lazy
 Bundle-Vendor: OSS ERP Solutions

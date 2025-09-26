@@ -46,38 +46,33 @@ import org.compiere.util.Env;
 import org.compiere.util.Evaluator;
 import org.compiere.util.Util;
 
-
 /**
  * Abstract base class for header+details AD_Tabs UI for AD_Window.
  * @author  <a href="mailto:agramdass@gmail.com">Ashley G Ramdass</a>
  * @author  <a href="mailto:hengsin@gmail.com">Low Heng Sin</a>
  * @date    Feb 25, 2007
- * @version $Revision: 0.10 $
- *
- * @author Hideaki Hagiwara（h.hagiwara@oss-erp.co.jp）
- *
  */
 public abstract class JPiereAbstractADTabbox extends AbstractUIPart implements JPiereIADTabbox
 {
     /** Logger **/
     private static final CLogger  log = CLogger.getCLogger (JPiereAbstractADTabbox.class);
-     /** List of variables/columnName that's reference by one or more gridTab logic expression **/
+    /** List of variables/columnName that's reference by one or more gridTab logic expression **/
     private ArrayList<String>   m_dependents = new ArrayList<String>();
-
-     /** List of {@link IADTabpanel} instance manage by this AbstractADTabbox instance **/
+    
+    /** List of {@link IADTabpanel} instance manage by this AbstractADTabbox instance **/
     protected List<JPiereIADTabpanel> tabPanelList = new ArrayList<JPiereIADTabpanel>();
     /** Parent part, the content part of AD Window **/
 	protected JPiereAbstractADWindowContent adWindowPanel;
-
+    
 	/**
 	 * default constructor
 	 */
     public JPiereAbstractADTabbox()
     {
     }
-
+    
     /**
-     *  Add new tab(AD_Tab).
+     *  Add new tab(AD_Tab).<br/>
      *  Delegate to {@link #doAddTab(GridTab, IADTabpanel)}
      *  @param gTab grid tab model
      *  @param tabPanel
@@ -94,12 +89,12 @@ public abstract class JPiereAbstractADTabbox extends AbstractUIPart implements J
                 m_dependents.add(name);
             }
         }
-
-        doAddTab(gTab, tabPanel);
+        
+        doAddTab(gTab, tabPanel);                
     }//  addTab
-
+    
     /**
-     * Handle add new tab to UI.
+     * Handle add new tab to UI.<br/>
      * Override to implement add new tab to UI.
      * @param tab
      * @param tabPanel
@@ -107,10 +102,11 @@ public abstract class JPiereAbstractADTabbox extends AbstractUIPart implements J
     protected abstract void doAddTab(GridTab tab, JPiereIADTabpanel tabPanel);
 
 	/**
-     * @param index of tab panel
+	 * Is tab enable at index
+     * @param index of tab
      * @return true if enable, false otherwise
      */
-    public boolean isEnabledAt(int index)
+    public boolean isEnabledAt(int index) 
     {
     	return true;
     }// isEnabledAt
@@ -134,9 +130,9 @@ public abstract class JPiereAbstractADTabbox extends AbstractUIPart implements J
         }
         return true;
     }
-
+    
     /**
-     * Change selected tab index from oldIndex to newIndex.
+     * Change selected tab index from oldIndex to newIndex.<br/>
      * Delegate to {@link #doTabSelectionChanged(int, int)}.
      * @param oldIndex
      * @param newIndex
@@ -146,27 +142,27 @@ public abstract class JPiereAbstractADTabbox extends AbstractUIPart implements J
     public boolean updateSelectedIndex(int oldIndex, int newIndex)
     {
         JPiereIADTabpanel newTab = tabPanelList.get(newIndex);
-
+        
         if (!isDisplay(newTab))
         {
             return false;
         }
-
+        
         boolean canJump = true;
 
         if (newIndex != oldIndex)
         {
             canJump = canNavigateTo(oldIndex, newIndex, true);
-            if (canJump)
+            if (canJump) 
             {
             	prepareContext(newIndex, newTab);
 	            doTabSelectionChanged(oldIndex, newIndex);
             }
         }
-
+        
         return canJump;
     }
-
+    
     /**
      * Prepare environment context for newTab.
      * @param newIndex
@@ -228,7 +224,7 @@ public abstract class JPiereAbstractADTabbox extends AbstractUIPart implements J
 	}
 
     /**
-     * Handle tab selection change event.
+     * Handle tab selection change event.<br/>
      * Override to update UI for tab selection change.
      * @param oldIndex
      * @param newIndex
@@ -267,7 +263,7 @@ public abstract class JPiereAbstractADTabbox extends AbstractUIPart implements J
 	}
 
     /**
-     * 
+     * Is navigation allow from fromIndex to toIndex
      * @param fromIndex
      * @param toIndex
      * @param checkRecordID true to validate fromIndex has a valid record id
@@ -282,7 +278,7 @@ public abstract class JPiereAbstractADTabbox extends AbstractUIPart implements J
 	            return false;
 	        }
     	}
-
+        
         boolean canJump = true;
 
         if (toIndex != fromIndex)
@@ -316,13 +312,13 @@ public abstract class JPiereAbstractADTabbox extends AbstractUIPart implements J
                     }
                 }
             }
-        }
+        }        
         return canJump;
     }
-
+    
     /**
      * Get break crumb path
-     * @return full path
+     * @return full break crumb path
      */
     public String getPath() {
     	StringBuilder path = new StringBuilder();
@@ -345,18 +341,18 @@ public abstract class JPiereAbstractADTabbox extends AbstractUIPart implements J
     			path.append(n);
     		}
     	}
-
+    	
     	return path.toString();
     }
-
+    
     /**
-     *  Handle DataStatusEvent.
+     *  Handle DataStatusEvent.<br/>
      *  Delegate to {@link #updateTabState()}.
      *  @param e event
      */
     public void evaluate (DataStatusEvent e)
     {
-
+    	
         boolean process = (e == null);
         String columnName = null;
         if (!process)
@@ -367,12 +363,12 @@ public abstract class JPiereAbstractADTabbox extends AbstractUIPart implements J
             else
                 process = true;
         }
-
+            
         if (process)
         {
         	updateTabState();
         }
-
+        
     } //  evaluate
 
     /**
@@ -381,14 +377,16 @@ public abstract class JPiereAbstractADTabbox extends AbstractUIPart implements J
     protected abstract void updateTabState();
 
 	/**
+	 * Get number of tab
      * @return the number of tab panels present
      */
     public int getTabCount()
     {
         return tabPanelList.size();
     }
-
+    
     /**
+     * Get IADTabpanel at index
      * @param index
      * @return {@link IADTabpanel}
      */
@@ -404,10 +402,10 @@ public abstract class JPiereAbstractADTabbox extends AbstractUIPart implements J
             throw new IndexOutOfBoundsException(ex.getMessage());
         }
     }
-
+    
     /**
-     * Set newIndex as selected tab
-     * Delegate to {@link #updateSelectedIndex(int, int)}
+     * Set newIndex as selected tab.<br/>
+     * Delegate to {@link #updateSelectedIndex(int, int)}.
      * @param newIndex
      */
     @Override
@@ -417,6 +415,7 @@ public abstract class JPiereAbstractADTabbox extends AbstractUIPart implements J
     }
 
     /**
+     * Set parent AD window panel
      * @param abstractADWindowPanel
      */
 	public void setADWindowPanel(JPiereAbstractADWindowContent abstractADWindowPanel) {
