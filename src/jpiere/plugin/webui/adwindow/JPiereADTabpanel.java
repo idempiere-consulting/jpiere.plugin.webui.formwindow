@@ -2533,10 +2533,5 @@ DataStatusListener, JPiereIADTabpanel, IdSpace, IFieldEditorContainer
 		;
 	}
 
-	@Override
-	public void onAfterFind() {
-		// TODO Auto-generated method stub
-		
-	}
 
 }
